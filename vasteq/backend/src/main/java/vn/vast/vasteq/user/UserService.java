@@ -14,6 +14,7 @@ public class UserService {
     @Inject UserRepository repository;
     @Inject PasswordHasher passwords;
     @Inject TokenService tokens;
+    @Inject AccountAccess access;
     private String dummyHash;
 
     private synchronized String dummyHash() {
@@ -22,12 +23,7 @@ public class UserService {
     }
     private ApiException unauthorized(){return new ApiException(401,"unauthorized","Authentication required or credentials invalid");}
     private User actor(JsonWebToken jwt,boolean admin) {
-        long id;
-        try{id=Long.parseLong(jwt.getSubject());}catch(RuntimeException e){throw unauthorized();}
-        User user=repository.findById(id);
-        if(user==null || !user.enabled)throw unauthorized();
-        if(admin && user.role!=User.Role.admin)throw new ApiException(403,"forbidden","Administrator access required");
-        return user;
+        return access.require(jwt,admin);
     }
     private User required(long id) {
         User user=repository.findById(id);

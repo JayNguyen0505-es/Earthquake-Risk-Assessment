@@ -1,7 +1,7 @@
 # VAST-Earthquake backend
 
 Java 21+, Quarkus, Hibernate ORM with Panache, and MySQL Connector/J through
-Quarkus JDBC. The application uses the approved `users` table. Hibernate does
+Quarkus JDBC. The application uses the approved `users` and `stations` tables. Hibernate does
 not create or change the production schema; apply the deployment SQL first.
 
 ## Start locally
@@ -91,6 +91,13 @@ JWTs expire naturally: there is no token revocation table, refresh endpoint,
 or logout endpoint. Changing a password does not invalidate existing JWTs.
 After a role change, log in again to obtain updated role claims.
 
+## Station API
+
+Station management is available at `/api/v1/station`, with authenticated reads
+and admin-only creation, updates, and deletion. See the
+[station API reference](../deployment/api-station.md) for endpoints, filters,
+fields, and coordinate validation.
+
 ## Tests
 
 ```sh
@@ -99,6 +106,8 @@ After a role change, log in again to obtain updated role claims.
 
 API tests use an isolated in-memory H2 database in MySQL compatibility mode.
 They cover registration, validation, login, JWT checks, own-profile and password
-changes, admin management, and last-administrator protection. The PEM files in
+changes, admin management, and last-administrator protection. Station tests
+cover read/write permissions, filtering, pagination, coordinate validation,
+partial updates, duplicate codes, and deletion restricted by linked channels. The PEM files in
 `src/test/resources` are test fixtures only; local runtime keys are generated
 separately by `setup_keys.py`.
