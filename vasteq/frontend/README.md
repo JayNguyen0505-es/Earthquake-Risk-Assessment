@@ -1,6 +1,7 @@
 # VAST-Earthquake frontend
 
-Account pages are available at `/register.html` and `/login.html`.
+The public landing page is available at `/` and `/index.html`. Account pages
+are available at `/register.html`, `/login.html`, and `/account.html`.
 They use the local SB Admin 2 Bootstrap stylesheet from `templates/sbadmin2.zip`,
 a small Material-style CSS override, system fonts, and vanilla JavaScript.
 There are no CDN requests, JavaScript frameworks, or frontend build tools.
@@ -17,11 +18,25 @@ cd vasteq/backend
 python3 scripts/run.py
 ```
 
-Open `http://127.0.0.1:8080/login.html` or `/register.html`. See the
+Open `http://127.0.0.1:8080/`. See the
 [backend README](../backend/README.md) for database and signing-key setup.
 Rebuild after changing frontend files to update the packaged application.
 Opening the HTML directly through `file://` does not support module scripts or
 API calls. A separate static host would need to proxy `/api/` to the backend.
+
+## Landing page
+
+The public home page introduces the project, its capabilities, the three study
+provinces, and project information. Analysis and risk-assessment cards are
+explicitly marked as in development. The decorative waveform SVG is an
+illustration, not a recording or a map.
+
+Visitors can read the page without authentication or JavaScript. Station
+records remain authenticated, matching the backend permissions. After session
+verification, the page shows My account and Sign out and loads a preview of
+three stations with the actual inventory count. Unknown coordinates are marked
+as pending. Errors offer retry controls; an expired token restores the public
+view. Sign out clears the local session without leaving the landing page.
 
 ## Registration
 
@@ -44,9 +59,10 @@ On success, only the JWT is stored in `sessionStorage` as `vasteq.accessToken`;
 passwords are never stored or logged. If browser storage is unavailable,
 the page reports the failure and permits another attempt.
 
-Successful login opens `/index.html`, a minimal account home that verifies the
-session using `GET /api/v1/user/me`. It shows the account display name and email.
-Missing or rejected tokens return to login; temporary connection errors allow
+Successful login opens `/index.html`, the public landing page. It checks the
+session through `GET /api/v1/user/me` before displaying account controls.
+My account opens `/account.html`, which shows the display name and email.
+On the account page, missing or rejected tokens return to login; temporary connection errors allow
 retrying. Sign out removes the local token and returns to login. Tokens still
 expire according to the backend's configured lifetime, without server-side
 revocation. The full application dashboard is a later frontend step.
@@ -71,7 +87,9 @@ password controls, keyboard focus, and responsive layout. Tests intercept
 registration requests and create no database accounts. `tests/test_login.py`
 adds nine checks for login validation, token storage, error handling, home
 session verification, sign out, and mobile layout. Both suites use intercepted
-API responses.
+API responses. `tests/test_home.py` adds eight checks for public access,
+authenticated station previews, session failures, retries, sign-out races,
+and responsive navigation.
 
 With the backend running, install Playwright in a separate testing environment
 and run from the repository root:

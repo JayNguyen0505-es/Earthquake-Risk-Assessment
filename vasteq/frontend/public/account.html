@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a73e8">
+  <title>My account · VAST-Earthquake</title>
+  <link rel="stylesheet" href="assets/vendor/sb-admin-2/sb-admin-2.min.css">
+  <link rel="stylesheet" href="assets/css/auth.css">
+  <script type="module" src="assets/js/account.js"></script>
+</head>
+<body>
+  <main class="auth-shell container-fluid">
+    <div class="auth-layout">
+      <a class="brand" href="index.html" aria-label="VAST-Earthquake home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M4 17h6l3-8 5 15 3-7h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span>VAST<span class="brand-divider">·</span>Earthquake</span>
+      </a>
+      <section class="card auth-card" aria-labelledby="page-title">
+        <header class="auth-header">
+          <h1 id="page-title">Welcome</h1>
+          <p id="home-status" role="status">Loading your account…</p>
+        </header>
+        <noscript><p class="form-alert">Enable JavaScript to view your account.</p></noscript>
+        <div id="account" hidden>
+          <dl class="account-details">
+            <dt>Display name</dt><dd id="account-name"></dd>
+            <dt>Email</dt><dd id="account-email"></dd>
+          </dl>
+        </div>
+        <p id="home-error" class="form-alert" role="alert" hidden></p>
+        <button id="retry-button" class="btn btn-primary btn-block primary-action" type="button" hidden>Try again</button>
+        <footer class="auth-footer">
+          <button id="sign-out" class="btn session-action" type="button">Sign out</button>
+        </footer>
+      </section>
+      <p class="auth-caption">Earthquake research &amp; assessment</p>
+    </div>
+  </main>
+</body>
+</html>

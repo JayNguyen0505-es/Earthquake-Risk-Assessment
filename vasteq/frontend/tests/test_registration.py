@@ -123,6 +123,8 @@ class RegistrationTest(unittest.TestCase):
 
     def test_password_toggles_and_keyboard_navigation(self):
         self.page.keyboard.press("Tab")
+        expect(self.page.get_by_role("link", name="VAST-Earthquake home", exact=True)).to_be_focused()
+        self.page.keyboard.press("Tab")
         expect(self.page.locator("#display-name")).to_be_focused()
         self.page.get_by_role("button", name="Show password", exact=True).click()
         expect(self.page.locator("#password")).to_have_attribute("type", "text")

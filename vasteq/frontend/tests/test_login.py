@@ -31,6 +31,7 @@ class LoginTest(unittest.TestCase):
         self.requests = []
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
         self.page.on("request", lambda request: self.requests.append(request.url))
+        self.page.route("**/api/v1/station*", lambda route: route.fulfill(status=200, content_type="application/json", body='{"items":[],"total":0,"offset":0,"limit":3}'))
         self.page.goto(BASE + "/login.html")
 
     def tearDown(self):
@@ -82,11 +83,14 @@ class LoginTest(unittest.TestCase):
         self.assertNotIn("authorization", request.headers)
         self.success(pending[0])
         expect(self.page).to_have_url(BASE + "/index.html")
-        expect(self.page.locator("#account-name")).to_have_text("Test User")
+        expect(self.page.locator("#header-account")).to_be_visible()
         self.assertEqual(self.page.evaluate("sessionStorage.getItem('vasteq.accessToken')"), TOKEN)
         self.assertEqual(me_requests[0].headers["authorization"], "Bearer " + TOKEN)
         self.assertEqual(self.page.evaluate("localStorage.length"), 0)
         self.assertEqual(self.page.evaluate("Object.keys(sessionStorage)"), ["vasteq.accessToken"])
+        self.page.locator("#header-account").click()
+        expect(self.page).to_have_url(BASE + "/account.html")
+        expect(self.page.locator("#account-name")).to_have_text("Test User")
 
     def test_bad_credentials_preserve_inputs_and_allow_retry(self):
         calls = []
@@ -140,18 +144,18 @@ class LoginTest(unittest.TestCase):
         expect(self.page.locator("#submit-button")).to_be_enabled()
 
     def test_missing_or_expired_session_returns_to_login(self):
-        self.page.goto(BASE + "/index.html")
+        self.page.goto(BASE + "/account.html")
         expect(self.page).to_have_url(BASE + "/login.html")
         self.page.evaluate("sessionStorage.setItem('vasteq.accessToken', 'expired-token')")
         self.page.route(ME_API, lambda route: route.fulfill(status=401))
-        self.page.goto(BASE + "/index.html")
+        self.page.goto(BASE + "/account.html")
         expect(self.page).to_have_url(BASE + "/login.html")
         self.assertIsNone(self.page.evaluate("sessionStorage.getItem('vasteq.accessToken')"))
 
     def test_home_network_failure_retry_and_sign_out(self):
         self.page.evaluate("sessionStorage.setItem('vasteq.accessToken', 'test-session-token')")
         self.page.route(ME_API, lambda route: route.abort("failed"))
-        self.page.goto(BASE + "/index.html")
+        self.page.goto(BASE + "/account.html")
         expect(self.page.locator("#home-error")).to_have_text("Unable to reach the server. Please try again.")
         self.assertEqual(self.page.evaluate("sessionStorage.getItem('vasteq.accessToken')"), TOKEN)
         self.page.unroute(ME_API)
@@ -163,6 +167,8 @@ class LoginTest(unittest.TestCase):
         self.assertIsNone(self.page.evaluate("sessionStorage.getItem('vasteq.accessToken')"))
 
     def test_password_toggle_navigation_and_mobile_layout(self):
+        self.page.keyboard.press("Tab")
+        expect(self.page.get_by_role("link", name="VAST-Earthquake home", exact=True)).to_be_focused()
         self.page.keyboard.press("Tab")
         expect(self.page.locator("#email")).to_be_focused()
         self.page.get_by_role("button", name="Show password", exact=True).click()

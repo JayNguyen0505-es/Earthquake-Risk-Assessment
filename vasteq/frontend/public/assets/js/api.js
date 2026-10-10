@@ -80,3 +80,13 @@ export class UserApi extends Api {
 }
 
 export const userApi = new UserApi();
+
+export class StationApi extends Api {
+  constructor(server = "") { super(server, "/api/v1/station"); }
+  list(filters = {}) {
+    const query = new URLSearchParams(filters).toString();
+    return this.get(query ? `?${query}` : "");
+  }
+}
+
+export const stationApi = new StationApi();

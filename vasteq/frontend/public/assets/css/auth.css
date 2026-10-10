@@ -27,6 +27,7 @@ body {
 .auth-layout { width: 100%; max-width: 464px; }
 .brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 28px; font-size: 20px; font-weight: 600; letter-spacing: -.4px; }
 .brand-divider { margin: 0 7px; color: #80868b; }
+.auth-layout > .brand { color: var(--auth-text); text-decoration: none; }
 .brand-mark { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; background: var(--auth-primary); color: white; border-radius: 12px; }
 .brand-mark svg { width: 32px; height: 32px; }
 .auth-card { padding: 36px; border: 1px solid #e3e7ed; border-radius: 16px; box-shadow: 0 4px 20px #20212408, 0 1px 3px #20212406; }
