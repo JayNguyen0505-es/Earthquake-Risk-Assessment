@@ -45,8 +45,9 @@ vasteq/
   deployment/      Local development and deployment configuration
 ```
 
-These directories are planned; the current project contains only this README.
-Application code and setup commands will be added as implementation begins.
+The MySQL [deployment setup](deployment/README.md) is available, with a
+[approved eight-table database structure](backend/database/README.md). Frontend,
+backend application code, and model services will be added as implementation begins.
 Research and training code remain in their respective work package directories.
 Shared raw data remains in `../data/` and must not be duplicated here.
 

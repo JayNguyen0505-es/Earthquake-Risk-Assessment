@@ -1,0 +1,43 @@
+name: vasteq
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: vasteq
+      MYSQL_USER: vasteq
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_app_password
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    secrets:
+      - mysql_root_password
+      - mysql_app_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$$(cat /run/secrets/mysql_app_password)"
+          mysql --protocol=TCP -h 127.0.0.1 -u vasteq -D vasteq
+          -Nse 'SELECT 1' > /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  mysql_data:
+
+secrets:
+  mysql_root_password:
+    file: ./.secrets/mysql_root_password
+  mysql_app_password:
+    file: ./.secrets/mysql_app_password

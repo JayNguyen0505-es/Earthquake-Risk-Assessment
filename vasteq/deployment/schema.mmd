@@ -1,0 +1,106 @@
+erDiagram
+    users {
+        bigint id PK
+        varchar email UK
+        varchar password_hash
+        varchar display_name
+        enum role
+        boolean enabled
+    }
+    stations {
+        bigint id PK
+        varchar network_code "composite unique"
+        varchar station_code "composite unique"
+        varchar name "nullable"
+        varchar city "nullable"
+        varchar province "nullable"
+        varchar instrument_type "nullable"
+        varchar instrument_serial "nullable"
+        varchar coordinate_crs "nullable"
+        decimal latitude "nullable"
+        decimal longitude "nullable"
+        decimal elevation_m "nullable"
+        varchar metadata_uri "nullable"
+        varchar metadata_source "nullable"
+    }
+    channels {
+        bigint id PK
+        bigint station_id FK "composite unique"
+        varchar location_code "composite unique"
+        varchar channel_code "composite unique"
+        double sample_rate_hz
+        double azimuth_deg "nullable"
+        double dip_deg "nullable"
+        varchar response_uri "nullable"
+    }
+    waveform_files {
+        bigint id PK
+        varchar storage_uri
+        char sha256 UK
+        bigint size_bytes
+        varchar format
+        varchar source "nullable"
+        datetime start_time
+        datetime end_time
+        json trace_metadata
+    }
+    seismic_events {
+        bigint id PK
+        varchar catalog_source "composite unique"
+        varchar external_event_id "composite unique"
+        datetime origin_time "nullable"
+        decimal latitude "nullable"
+        decimal longitude "nullable"
+        double depth_km "nullable"
+        double magnitude "nullable"
+        varchar magnitude_type "nullable"
+        json provenance "nullable"
+    }
+    models {
+        bigint id PK
+        varchar code "composite unique"
+        varchar version "composite unique"
+        varchar name
+        varchar task
+        varchar work_package
+        varchar artifact_uri
+        char artifact_sha256
+        json input_schema
+        json output_schema
+        json training_metadata "nullable"
+        json evaluation_metrics "nullable"
+    }
+    model_runs {
+        bigint id PK
+        bigint model_id FK
+        bigint requested_by_user_id FK "nullable"
+        bigint event_id FK "nullable"
+        enum status
+        json input_parameters
+        json result "nullable"
+        text error_message "nullable"
+        datetime queued_at
+        datetime started_at "nullable"
+        datetime finished_at "nullable"
+    }
+    phase_picks {
+        bigint id PK
+        bigint channel_id FK
+        bigint waveform_file_id FK "nullable"
+        bigint event_id FK "nullable"
+        bigint model_run_id FK "nullable"
+        varchar phase
+        datetime arrival_time
+        double probability "nullable"
+        double uncertainty_seconds "nullable"
+        varchar source
+    }
+
+    stations ||--o{ channels : station_id
+    models ||--o{ model_runs : model_id
+    users o|--o{ model_runs : requested_by_user_id
+    seismic_events o|--o{ model_runs : event_id
+    channels ||--o{ phase_picks : channel_id
+    waveform_files o|--o{ phase_picks : waveform_file_id
+    seismic_events o|--o{ phase_picks : event_id
+    model_runs o|--o{ phase_picks : model_run_id
