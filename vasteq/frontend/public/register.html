@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Create a VAST-Earthquake account to access earthquake data and assessment tools.">
+  <meta name="theme-color" content="#1a73e8">
+  <title>Create your account · VAST-Earthquake</title>
+  <link rel="stylesheet" href="assets/vendor/sb-admin-2/sb-admin-2.min.css">
+  <link rel="stylesheet" href="assets/css/auth.css">
+  <script type="module" src="assets/js/register.js"></script>
+</head>
+<body>
+  <main class="auth-shell container-fluid">
+    <div class="auth-layout">
+      <div class="brand" aria-label="VAST-Earthquake">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M4 17h6l3-8 5 15 3-7h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span>VAST<span class="brand-divider">·</span>Earthquake</span>
+      </div>
+
+      <section class="card auth-card" aria-labelledby="page-title">
+        <header class="auth-header">
+          <h1 id="page-title" tabindex="-1">Create your account</h1>
+          <p id="page-subtitle">Access earthquake data and assessment tools.</p>
+        </header>
+
+        <noscript><p class="form-alert">Enable JavaScript to create an account.</p></noscript>
+
+        <form id="register-form" novalidate>
+          <div class="field-group">
+            <div class="outlined-field">
+              <label for="display-name">Display name</label>
+              <input class="form-control" id="display-name" name="displayName" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required aria-describedby="display-name-error">
+            </div>
+            <p class="field-error" id="display-name-error" aria-live="polite"></p>
+          </div>
+
+          <div class="field-group">
+            <div class="outlined-field">
+              <label for="email">Email</label>
+              <input class="form-control" id="email" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com" required aria-describedby="email-error">
+            </div>
+            <p class="field-error" id="email-error" aria-live="polite"></p>
+          </div>
+
+          <div class="field-group">
+            <div class="outlined-field password-field">
+              <label for="password">Password</label>
+              <input class="form-control" id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="password-help password-error">
+              <button class="password-toggle" type="button" data-password-target="password" aria-controls="password" aria-label="Show password" aria-pressed="false">Show</button>
+            </div>
+            <p class="field-help" id="password-help">Use 12–128 characters.</p>
+            <p class="field-error" id="password-error" aria-live="polite"></p>
+          </div>
+
+          <div class="field-group">
+            <div class="outlined-field password-field">
+              <label for="confirm-password">Confirm password</label>
+              <input class="form-control" id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" maxlength="128" required aria-describedby="confirm-password-error">
+              <button class="password-toggle" type="button" data-password-target="confirm-password" aria-controls="confirm-password" aria-label="Show confirmation password" aria-pressed="false">Show</button>
+            </div>
+            <p class="field-error" id="confirm-password-error" aria-live="polite"></p>
+          </div>
+
+          <p id="form-error" class="form-alert" role="alert" hidden></p>
+          <p id="form-status" class="sr-only" role="status" aria-live="polite"></p>
+          <button id="submit-button" class="btn btn-primary btn-block primary-action" type="submit">
+            <span class="button-spinner" aria-hidden="true" hidden></span>
+            <span id="submit-label">Create account</span>
+          </button>
+        </form>
+
+        <div id="registration-success" class="success-panel" hidden>
+          <span class="success-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m6 12 4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <a class="btn btn-primary btn-block primary-action" href="login.html">Sign in</a>
+        </div>
+
+        <footer id="auth-footer" class="auth-footer">
+          Already have an account? <a href="login.html">Sign in</a>
+        </footer>
+      </section>
+      <p class="auth-caption">Earthquake research &amp; assessment</p>
+    </div>
+  </main>
+</body>
+</html>
