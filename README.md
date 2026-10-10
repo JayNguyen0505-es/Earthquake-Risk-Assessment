@@ -23,6 +23,7 @@ Work package 5
 ## 5.1.1
 We are going to build, train, and evaluate machine learning, deep learning models for estimation of earthquake parameters from sensors data around the world.
 Source code for this work package should be located in ```./511/``` folder.
+See [511/README.md](511/README.md) for setup, waveform inspection, and the initial research sequence.
 
 ## 5.1.2
 We are going to build, train, and evaluate machine learning, deep learning models foor estimation of sil vibration.
