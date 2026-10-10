@@ -46,8 +46,9 @@ vasteq/
 ```
 
 The MySQL [deployment setup](deployment/README.md) is available, with a
-[approved eight-table database structure](backend/database/README.md). Frontend,
-backend application code, and model services will be added as implementation begins.
+[approved eight-table database structure](backend/database/README.md). The [backend account API](backend/README.md) implements registration, JWT login,
+and account management using Hibernate ORM and MySQL JDBC. Frontend and model
+services will be added as implementation continues.
 Research and training code remain in their respective work package directories.
 Shared raw data remains in `../data/` and must not be duplicated here.
 
