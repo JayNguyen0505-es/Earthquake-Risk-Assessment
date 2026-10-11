@@ -1,0 +1,26 @@
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="container topbar">
+    <!--#include virtual="/inc/brand.html" -->
+    <!--#if expr="$page = home" -->
+    <nav class="nav-links" aria-label="Main navigation">
+      <a href="#overview">Overview</a>
+      <a href="#stations">Stations</a>
+      <a href="#about">About</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="btn-text" href="/users.html" data-auth-admin hidden>Manage users</a>
+      <a id="sign-in" class="btn-text" href="/login.html" data-auth-public>Sign in</a>
+      <a class="btn btn-main btn-small" href="/register.html" data-auth-public>Create account</a>
+      <a id="my-account" class="btn-text" href="/account.html" data-auth-private hidden>My account</a>
+      <button id="sign-out" class="btn btn-alt btn-small" type="button" data-auth-private hidden>Sign out</button>
+    </div>
+    <!--#else -->
+    <nav class="nav-actions" aria-label="Account navigation">
+      <a class="btn-text" href="/index.html">Home</a>
+      <a class="btn-text" href="/account.html">My account</a>
+      <button id="sign-out" class="btn btn-alt btn-small" type="button">Sign out</button>
+    </nav>
+    <!--#endif -->
+  </div>
+</header>

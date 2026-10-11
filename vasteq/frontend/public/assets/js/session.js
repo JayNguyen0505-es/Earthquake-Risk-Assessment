@@ -1,19 +1,21 @@
-const TOKEN_KEY = "vasteq.accessToken";
+const key = "vasteq.accessToken";
 
-export function getToken() {
-  try {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    return token && token !== "undefined" && token !== "null" ? token : null;
-  } catch {
-    return null;
-  }
+export function token() {
+  try { return sessionStorage.getItem(key); }
+  catch { return null; }
 }
 
-export function saveToken(token) {
-  // Let the page report storage failures rather than redirect without a session.
-  sessionStorage.setItem(TOKEN_KEY, token);
+export function save(value) {
+  try { sessionStorage.setItem(key, value); }
+  catch { throw new Error("Your browser couldn't save this session. Allow site storage and try again."); }
 }
 
-export function clearSession() {
-  try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* Storage may be unavailable. */ }
+export function clear() {
+  try { sessionStorage.removeItem(key); }
+  catch {}
+}
+
+export function logout() {
+  clear();
+  location.replace("login.html");
 }

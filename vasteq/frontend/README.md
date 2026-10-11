@@ -21,22 +21,27 @@ See the [deployment instructions](../deployment/README.md#frontend-with-nginx)
 for configuration validation and reload commands. This Linux setup uses Docker
 host networking. Frontend edits are served directly without rebuilding Maven.
 
-## Serve directly with the backend
+## Shared includes
 
-Frontend files live in `public/`. Maven includes this directory in Quarkus's
-static resources, so the page and API share an origin:
+nginx renders SSI includes from `public/inc/`: `head.html`, `brand.html`,
+`header.html`, `caption.html`, and `submit.html`. Each page sets `page` to its
+JavaScript module name before including the shared head. Login and registration
+use `auth`; each sets `submit` for the shared button label.
 
-```sh
-cd vasteq/backend
-./mvnw package
-python3 scripts/run.py
+```html
+<!--#set var="page" value="users" -->
+<!--#include virtual="/inc/head.html" -->
 ```
 
-Open `http://127.0.0.1:8080/`. See the
-[backend README](../backend/README.md) for database and signing-key setup.
-Rebuild after changing frontend files to update the packaged application.
-Opening the HTML directly through `file://` does not support module scripts or
-API calls. A separate static host would need to proxy `/api/` to the backend.
+JavaScript logic stays in ES modules; SSI shares the module script tag.
+Includes are internal to nginx and cannot be opened directly. Edit a partial
+once to update every page that includes it. HTML changes need no reload;
+nginx configuration changes require validation and a reload or container recreation.
+
+Serve the frontend through nginx on port 28080. Quarkus static serving on port
+8080 and `file://` do not expand SSI. The backend continues to serve the API on
+8080; nginx proxies it under the frontend origin. See the
+[backend README](../backend/README.md) for backend setup.
 
 ## Landing page
 
@@ -116,6 +121,14 @@ tokens. Request bodies and tokens are not logged.
 The original sample and template archive remain in `templates/`; they are not
 published as static resources. No database schema changes are needed.
 
+## Code style
+
+Use short, clear names such as `load`, `edit`, `data`, and `err`. Keep markup in
+HTML, share small helpers in `ui.js`, and use `auth.js` for both account forms.
+Avoid runtime assertions, response-shape checks, and unused abstractions. Keep
+input validation, request errors, access controls, and accessible labels.
+The vendor stylesheet stays as distributed.
+
 ## Browser tests
 
 `tests/test_registration.py` contains seven browser checks for registration validation,
@@ -130,7 +143,7 @@ and responsive navigation. `tests/test_users.py` adds nine checks for admin
 access, CRUD dialogs, notifications, retries, pagination, duplicate submission
 protection, and mobile layout, also without writing database records.
 
-With the backend running, install Playwright in a separate testing environment
+With nginx and the backend running, install Playwright in a separate testing environment
 and run from the repository root:
 
 ```sh
@@ -139,5 +152,5 @@ python -m playwright install chromium
 python -m unittest discover -s vasteq/frontend/tests -v
 ```
 
-Set `VASTEQ_FRONTEND_URL` to test another host. Playwright is a test-only tool;
+Tests use `http://127.0.0.1:28080` by default. Set `VASTEQ_FRONTEND_URL` to test another nginx host. Playwright is a test-only tool;
 it is not shipped to frontend users.

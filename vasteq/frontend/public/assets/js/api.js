@@ -1,99 +1,52 @@
-/** Shared Fetch API client, based on templates/api.js. */
-import { getToken } from "./session.js";
+import { token } from "./session.js";
 
-export class ApiError extends Error {
-  constructor(message, status = 0, code = "network_error", body = null) {
-    super(message);
-    this.name = "ApiError";
+class ApiError extends Error {
+  constructor(msg, status = 0, code = "") {
+    super(msg);
     this.status = status;
     this.code = code;
-    this.body = body;
   }
 }
 
-export class Api {
-  constructor(server = "", endpoint = "", expectJson = true) {
-    this.server = server;
-    this.endpoint = endpoint;
-    this.expectJson = expectJson;
-  }
+class Api {
+  constructor(path) { this.path = path; }
 
-  async ajax(param) {
-    const { url, authenticated = true, timeoutMs = 15000, ...options } = param;
-    const headers = new Headers(options.headers);
-    if (authenticated) {
-      const token = getToken();
-      if (token) headers.set("Authorization", `Bearer ${token}`);
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  async req(path = "", method = "GET", data, auth = true) {
+    const headers = {};
+    if (auth && token()) headers.Authorization = `Bearer ${token()}`;
+    if (data) headers["Content-Type"] = "application/json";
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
-      const response = await fetch(url, { ...options, headers, signal: controller.signal });
-      if (response.ok && (response.status === 204 || response.status === 205)) return null;
-      if (response.ok && !this.expectJson) return await response.blob();
-      const text = await response.text();
-      let data = null;
-      if (text && response.headers.get("Content-Type")?.includes("json")) {
-        try { data = JSON.parse(text); } catch {
-          if (response.ok) throw new ApiError("The server returned an invalid response.", response.status, "invalid_response");
-        }
+      const res = await fetch(this.path + path, {
+        method, headers, body: JSON.stringify(data), signal: ctrl.signal
+      });
+      if (res.status === 204) return null;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new ApiError(err.message || "The request could not be completed.", res.status, err.code);
       }
-      if (!response.ok) {
-        throw new ApiError(data?.message || "The request could not be completed.", response.status,
-          data?.code || "http_error", data);
-      }
-      if (text && data === null) throw new ApiError("The server returned an invalid response.", response.status, "invalid_response");
-      return data;
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      if (error.name === "AbortError") throw new ApiError("The request timed out. Please try again.", 0, "timeout");
-      throw new ApiError("Unable to reach the server. Please try again.");
-    } finally {
-      clearTimeout(timeout);
-    }
+      return await res.json();
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      if (err.name === "SyntaxError") throw new ApiError("The server returned an invalid response.");
+      throw new ApiError(err.name === "AbortError"
+        ? "The request timed out. Please try again."
+        : "Unable to reach the server. Please try again.");
+    } finally { clearTimeout(timer); }
   }
 
-  async call(path = "", method = "GET", body, headers = {}, options = {}) {
-    const request = { url: this.server + this.endpoint + path, method, headers: new Headers(headers), ...options };
-    if (body !== undefined && body !== null) {
-      if (typeof body === "string" || body instanceof FormData || body instanceof Blob) request.body = body;
-      else {
-        request.body = JSON.stringify(body);
-        if (!request.headers.has("Content-Type")) request.headers.set("Content-Type", "application/json");
-      }
-    }
-    return this.ajax(request);
-  }
-
-  get(path = "") { return this.call(path); }
-  post(path, body, headers, options) { return this.call(path, "POST", body, headers, options); }
-  put(path, body, headers) { return this.call(path, "PUT", body, headers); }
-  patch(path, body, headers) { return this.call(path, "PATCH", body, headers); }
-  delete(path) { return this.call(path, "DELETE"); }
+  list(params = {}) { return this.req(`?${new URLSearchParams(params)}`); }
+  add(data) { return this.req("", "POST", data); }
+  edit(id, data) { return this.req(`/${id}`, "PATCH", data); }
+  del(id) { return this.req(`/${id}`, "DELETE"); }
 }
 
-export class UserApi extends Api {
-  constructor(server = "") { super(server, "/api/v1/user"); }
-  register(account) { return this.post("/register", account, {}, { authenticated: false }); }
-  login(email, password) { return this.post("/login", { email, password }, {}, { authenticated: false }); }
-  me() { return this.get("/me"); }
-  list(filters = {}) {
-    const query = new URLSearchParams(filters).toString();
-    return this.get(query ? `?${query}` : "");
-  }
-  create(account) { return this.post("", account); }
-  update(id, account) { return this.patch(`/${encodeURIComponent(id)}`, account); }
-  remove(id) { return this.delete(`/${encodeURIComponent(id)}`); }
+class User extends Api {
+  register(data) { return this.req("/register", "POST", data, false); }
+  login(email, password) { return this.req("/login", "POST", { email, password }, false); }
+  me() { return this.req("/me"); }
 }
 
-export const userApi = new UserApi();
-
-export class StationApi extends Api {
-  constructor(server = "") { super(server, "/api/v1/station"); }
-  list(filters = {}) {
-    const query = new URLSearchParams(filters).toString();
-    return this.get(query ? `?${query}` : "");
-  }
-}
-
-export const stationApi = new StationApi();
+export const user = new User("/api/v1/user");
+export const station = new Api("/api/v1/station");

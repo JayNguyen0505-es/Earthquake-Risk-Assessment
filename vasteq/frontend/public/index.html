@@ -1,56 +1,32 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--#set var="page" value="home" -->
+  <!--#include virtual="/inc/head.html" -->
   <meta name="description" content="Earthquake research and assessment for Sơn La, Điện Biên, and Lai Châu in Northwest Vietnam.">
-  <meta name="theme-color" content="#1a73e8">
   <title>VAST-Earthquake · Research &amp; assessment</title>
-  <link rel="stylesheet" href="assets/vendor/sb-admin-2/sb-admin-2.min.css">
-  <link rel="stylesheet" href="assets/css/auth.css">
   <link rel="stylesheet" href="assets/css/home.css">
-  <script type="module" src="assets/js/home.js"></script>
 </head>
 <body class="landing-page">
-  <a class="skip-link" href="#main-content">Skip to content</a>
-  <header class="site-header">
-    <div class="container site-nav">
-      <a class="brand site-brand" href="index.html" aria-label="VAST-Earthquake home">
-        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M4 17h6l3-8 5 15 3-7h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span>VAST<span class="brand-divider">·</span>Earthquake</span>
-      </a>
-      <nav class="section-nav" aria-label="Main navigation">
-        <a href="#overview">Overview</a>
-        <a href="#stations">Stations</a>
-        <a href="#about">About</a>
-      </nav>
-      <div class="header-actions">
-        <a class="text-action" href="users.html" data-auth-admin hidden>Manage users</a>
-        <a id="header-sign-in" class="text-action" href="login.html" data-auth-public>Sign in</a>
-        <a class="btn primary-action compact-action" href="register.html" data-auth-public>Create account</a>
-        <a id="header-account" class="text-action" href="account.html" data-auth-private hidden>My account</a>
-        <button id="sign-out" class="btn secondary-action compact-action" type="button" data-auth-private hidden>Sign out</button>
-      </div>
-    </div>
-  </header>
+  <!--#include virtual="/inc/header.html" -->
 
-  <div id="session-notice" class="container session-notice" hidden>
+  <div id="session-note" class="container session-note" hidden>
     <p role="alert">Your session could not be checked. You can still explore this page.</p>
-    <button id="session-retry" class="btn text-action" type="button">Try again</button>
+    <button id="session-retry" class="btn btn-text" type="button">Try again</button>
   </div>
 
-  <main id="main-content" tabindex="-1">
-    <section id="overview" class="hero section-anchor">
+  <main id="main" tabindex="-1">
+    <section id="overview" class="hero anchor">
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-7 hero-copy">
             <p class="eyebrow">Data · Research · Decision support</p>
             <h1>Earthquake research and assessment for <span>Northwest Vietnam</span></h1>
-            <p class="hero-description">Connecting monitoring data and research models to support earthquake research and decision-making in Sơn La, Điện Biên, and Lai Châu.</p>
+            <p class="hero-text">Connecting monitoring data and research models to support earthquake research and decision-making in Sơn La, Điện Biên, and Lai Châu.</p>
             <div class="hero-actions">
-              <a class="btn primary-action" href="#stations">Explore stations <span aria-hidden="true">→</span></a>
-              <a class="btn secondary-action" href="login.html" data-auth-public>Sign in</a>
-              <a class="btn secondary-action" href="account.html" data-auth-private hidden>My account</a>
+              <a class="btn btn-main" href="#stations">Explore stations <span aria-hidden="true">→</span></a>
+              <a class="btn btn-alt" href="login.html" data-auth-public>Sign in</a>
+              <a class="btn btn-alt" href="account.html" data-auth-private hidden>My account</a>
             </div>
           </div>
           <div class="col-lg-5 hero-visual" aria-hidden="true">
@@ -69,77 +45,77 @@
       </div>
     </section>
 
-    <section class="capabilities section-block" aria-labelledby="capabilities-title">
+    <section class="capabilities section" aria-labelledby="capabilities-title">
       <div class="container">
-        <div class="section-heading"><p class="eyebrow">Our focus</p><h2 id="capabilities-title">From monitoring to insight</h2><p>A connected approach to understanding earthquakes and their potential impacts.</p></div>
-        <div class="row capability-row">
+        <div class="section-head"><p class="eyebrow">Our focus</p><h2 id="capabilities-title">From monitoring to insight</h2><p>A connected approach to understanding earthquakes and their potential impacts.</p></div>
+        <div class="row features">
           <div class="col-md-4">
-            <article class="card capability-card">
+            <article class="card feature">
               <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v11m-3 6h6M8 14l-3 6m11-6 3 6M5 6a10 10 0 0 0 0 8m14-8a10 10 0 0 1 0 8M8 8a6 6 0 0 0 0 4m8-4a6 6 0 0 1 0 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-              <span class="feature-status available">Available to signed-in users</span>
+              <span class="tag available">Available to signed-in users</span>
               <h3>Station inventory</h3><p>Explore monitoring stations, instrument metadata, and locations where coordinates are known.</p>
-              <a href="#stations" class="card-action">Explore stations <span aria-hidden="true">→</span></a>
+              <a href="#stations" class="more">Explore stations <span aria-hidden="true">→</span></a>
             </article>
           </div>
           <div class="col-md-4">
-            <article class="card capability-card">
+            <article class="card feature">
               <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4l2-7 4 14 3-7h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="feature-status">In development</span>
+              <span class="tag">In development</span>
               <h3>Earthquake data analysis</h3><p>Research workflows for recorded waveforms, phase arrivals, and earthquake parameter estimation.</p>
-              <p class="development-note">Analysis tools are being developed.</p>
+              <p class="note">Analysis tools are being developed.</p>
             </article>
           </div>
           <div class="col-md-4">
-            <article class="card capability-card">
+            <article class="card feature">
               <span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 4v6c0 4-8 8-8 8s-8-4-8-8V7l8-4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-              <span class="feature-status">In development</span>
+              <span class="tag">In development</span>
               <h3>Risk assessment</h3><p>Research into ground shaking and regional scenarios to inform assessment and response planning.</p>
-              <p class="development-note">Assessment tools are being developed.</p>
+              <p class="note">Assessment tools are being developed.</p>
             </article>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="study-area section-block" aria-labelledby="study-title">
+    <section class="study-area section" aria-labelledby="study-title">
       <div class="container">
         <div class="row align-items-center">
           <div class="col-lg-6 study-copy"><p class="eyebrow">Study area</p><h2 id="study-title">A regional focus.<br>A shared understanding.</h2><p>The project focuses on Sơn La, Điện Biên, and Lai Châu in Northwest Vietnam, bringing monitoring information and research together for regional earthquake assessment.</p></div>
           <div class="col-lg-6">
-            <ul class="province-list" aria-label="Study provinces"><li><span class="province-number" aria-hidden="true">01</span>Sơn La</li><li><span class="province-number" aria-hidden="true">02</span>Điện Biên</li><li><span class="province-number" aria-hidden="true">03</span>Lai Châu</li></ul>
+            <ul class="provinces" aria-label="Study provinces"><li><span class="province-no" aria-hidden="true">01</span>Sơn La</li><li><span class="province-no" aria-hidden="true">02</span>Điện Biên</li><li><span class="province-no" aria-hidden="true">03</span>Lai Châu</li></ul>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="stations" class="section-block section-anchor" aria-labelledby="stations-title">
+    <section id="stations" class="section anchor" aria-labelledby="stations-title">
       <div class="container">
-        <div class="section-heading"><p class="eyebrow">Station inventory</p><h2 id="stations-title">Start with the monitoring network</h2><p>Station identities, instruments, and source metadata provide the foundation for working with recorded data. Missing coordinates remain explicitly marked.</p></div>
-        <div id="station-public" class="station-access" data-auth-public>
+        <div class="section-head"><p class="eyebrow">Station inventory</p><h2 id="stations-title">Start with the monitoring network</h2><p>Station identities, instruments, and source metadata provide the foundation for working with recorded data. Missing coordinates remain explicitly marked.</p></div>
+        <div id="station-login" class="station-gate" data-auth-public>
           <div><h3>Explore station records</h3><p>Sign in to view the station inventory and its available metadata.</p></div>
-          <a class="btn primary-action" href="login.html">Sign in to explore</a>
+          <a class="btn btn-main" href="login.html">Sign in to explore</a>
         </div>
-        <div id="station-private" data-auth-private hidden>
-          <p id="station-status" class="station-summary" role="status"></p>
-          <div id="station-preview" class="row"></div>
-          <p id="station-error" class="form-alert" role="alert" hidden></p>
-          <button id="station-retry" class="btn secondary-action" type="button" hidden>Try again</button>
+        <div id="station-list" data-auth-private hidden>
+          <p id="station-status" class="station-info" role="status"></p>
+          <div id="station-cards" class="row"></div>
+          <p id="station-error" class="notice-error" role="alert" hidden></p>
+          <button id="station-retry" class="btn btn-alt" type="button" hidden>Try again</button>
         </div>
       </div>
     </section>
 
-    <section id="about" class="about-section section-block section-anchor" aria-labelledby="about-title">
+    <section id="about" class="about-section section anchor" aria-labelledby="about-title">
       <div class="container">
         <div class="row">
           <div class="col-lg-5"><p class="eyebrow">About the project</p><h2 id="about-title">Connecting data,<br>research, and decisions.</h2></div>
-          <div class="col-lg-7 about-copy"><p>VAST-Earthquake brings station metadata, waveform information, and earthquake research into one system for the Northwest Vietnam study area.</p><p>The project connects research on earthquake parameter estimation and ground-shaking prediction with planned assessment and response workflows. Analysis and assessment features will become available as the research models are integrated.</p><a href="#overview" class="card-action">Back to overview <span aria-hidden="true">↑</span></a></div>
+          <div class="col-lg-7 about-copy"><p>VAST-Earthquake brings station metadata, waveform information, and earthquake research into one system for the Northwest Vietnam study area.</p><p>The project connects research on earthquake parameter estimation and ground-shaking prediction with planned assessment and response workflows. Analysis and assessment features will become available as the research models are integrated.</p><a href="#overview" class="more">Back to overview <span aria-hidden="true">↑</span></a></div>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container footer-content"><div><strong>VAST-Earthquake</strong><p>Earthquake research &amp; assessment<br>Sơn La · Điện Biên · Lai Châu</p></div><nav aria-label="Footer navigation"><a href="#about">Project information</a><a href="#stations">Stations</a><a href="login.html" data-auth-public>Sign in</a><a href="account.html" data-auth-private hidden>My account</a></nav></div>
+    <div class="container footer-body"><div><strong>VAST-Earthquake</strong><p>Earthquake research &amp; assessment<br>Sơn La · Điện Biên · Lai Châu</p></div><nav aria-label="Footer navigation"><a href="#about">Project information</a><a href="#stations">Stations</a><a href="login.html" data-auth-public>Sign in</a><a href="account.html" data-auth-private hidden>My account</a></nav></div>
   </footer>
 </body>
 </html>

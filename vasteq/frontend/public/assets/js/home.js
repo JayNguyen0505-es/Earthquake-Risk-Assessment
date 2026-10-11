@@ -1,104 +1,86 @@
-import { userApi, stationApi } from "./api.js";
-import { getToken, clearSession } from "./session.js";
+import { user, station } from "./api.js";
+import { token, clear } from "./session.js";
+import { $, $$, el, msg } from "./ui.js";
 
-const sessionNotice = document.querySelector("#session-notice");
-const stationStatus = document.querySelector("#station-status");
-const stationPreview = document.querySelector("#station-preview");
-const stationError = document.querySelector("#station-error");
-const stationRetry = document.querySelector("#station-retry");
+const notice = $("#session-note");
+const status = $("#station-status");
+const cards = $("#station-cards");
+const alert = $("#station-error");
+const retry = $("#station-retry");
 let viewer = null;
-let sessionRequest = 0;
-let stationRequest = 0;
+let seq = 0;
 
-function renderViewer(user) {
-  viewer = user;
-  for (const node of document.querySelectorAll("[data-auth-public]")) node.hidden = Boolean(user);
-  for (const node of document.querySelectorAll("[data-auth-private]")) node.hidden = !user;
-  for (const node of document.querySelectorAll("[data-auth-admin]")) node.hidden = user?.role !== "admin";
-  stationPreview.replaceChildren();
-  stationStatus.textContent = "";
-  stationError.hidden = true;
-  stationRetry.hidden = true;
+function render(data) {
+  viewer = data;
+  for (const node of $$("[data-auth-public]")) node.hidden = !!data;
+  for (const node of $$("[data-auth-private]")) node.hidden = !data;
+  for (const node of $$("[data-auth-admin]")) node.hidden = data?.role !== "admin";
+  cards.replaceChildren();
+  status.textContent = "";
+  msg(alert);
+  retry.hidden = true;
 }
 
-function signOut() {
-  sessionRequest++;
-  stationRequest++;
-  clearSession();
-  renderViewer(null);
-  sessionNotice.hidden = true;
-  document.querySelector("#header-sign-in").focus();
+function out() {
+  seq++;
+  clear();
+  render(null);
+  notice.hidden = true;
+  $("#sign-in").focus();
 }
 
-function stationCard(station) {
-  const column = document.createElement("div");
-  column.className = "col-md-4 station-column";
-  const card = document.createElement("article");
-  card.className = "card station-preview-card";
-  const title = document.createElement("h3");
-  title.textContent = `${station.networkCode}.${station.stationCode}`;
-  card.append(title);
-  for (const value of [station.name, station.province, station.instrumentType]) {
-    if (!value) continue;
-    const text = document.createElement("p");
-    text.textContent = value;
-    card.append(text);
+function card(data) {
+  const col = el("div", "", "col-md-4 station-col");
+  const box = el("article", "", "card station-card");
+  box.append(el("h3", `${data.networkCode}.${data.stationCode}`));
+  for (const text of [data.name, data.province, data.instrumentType]) {
+    if (text) box.append(el("p", text));
   }
-  const coordinates = document.createElement("p");
-  coordinates.className = "station-coordinate-status";
-  coordinates.textContent = station.latitude != null && station.longitude != null
-    ? "Coordinates available" : "Coordinates pending";
-  card.append(coordinates);
-  column.append(card);
-  return column;
+  box.append(el("p", data.latitude != null && data.longitude != null
+    ? "Coordinates available" : "Coordinates pending", "coords"));
+  col.append(box);
+  return col;
 }
 
-async function loadStations() {
+async function load() {
   if (!viewer) return;
-  const request = ++stationRequest;
-  const token = getToken();
-  stationError.hidden = true;
-  stationRetry.hidden = true;
-  stationStatus.textContent = "Loading station records…";
+  const id = ++seq;
+  msg(alert);
+  retry.hidden = true;
+  status.textContent = "Loading station records…";
   try {
-    const data = await stationApi.list({ limit: 3 });
-    if (request !== stationRequest || token !== getToken() || !viewer) return;
-    if (!data || !Array.isArray(data.items) || !Number.isInteger(data.total) || data.total < 0)
-      throw new Error("Invalid station response");
-    stationPreview.replaceChildren(...data.items.map(stationCard));
-    stationStatus.textContent = data.total === 0 ? "No station records are available yet."
-      : `Showing ${data.items.length} of ${data.total} station records.`;
-  } catch (error) {
-    if (request !== stationRequest || token !== getToken() || !viewer) return;
-    if (error.status === 401) { signOut(); return; }
-    stationStatus.textContent = "Station records are temporarily unavailable.";
-    stationError.textContent = "Station records couldn't be loaded. Please try again.";
-    stationError.hidden = false;
-    stationRetry.hidden = false;
+    const data = await station.list({ limit: 3 });
+    if (id !== seq) return;
+    cards.replaceChildren(...data.items.map(card));
+    status.textContent = data.total ? `Showing ${data.items.length} of ${data.total} station records.`
+      : "No station records are available yet.";
+  } catch (err) {
+    if (id !== seq) return;
+    if (err.status === 401) return out();
+    status.textContent = "Station records are temporarily unavailable.";
+    msg(alert, "Station records couldn't be loaded. Please try again.");
+    retry.hidden = false;
   }
 }
 
-async function checkSession() {
-  const request = ++sessionRequest;
-  const token = getToken();
-  sessionNotice.hidden = true;
-  if (!token) { renderViewer(null); return; }
+async function init() {
+  const id = ++seq;
+  notice.hidden = true;
+  if (!token()) return render(null);
   try {
-    const user = await userApi.me();
-    if (request !== sessionRequest || token !== getToken()) return;
-    if (!user || typeof user.displayName !== "string" || typeof user.email !== "string")
-      throw new Error("Invalid account response");
-    renderViewer(user);
-    loadStations();
-  } catch (error) {
-    if (request !== sessionRequest || token !== getToken()) return;
-    renderViewer(null);
-    if (error.status === 401) clearSession();
-    else sessionNotice.hidden = false;
+    const data = await user.me();
+    if (id !== seq) return;
+    render(data);
+    load();
+  } catch (err) {
+    if (id !== seq) return;
+    render(null);
+    if (err.status === 401) clear();
+    else notice.hidden = false;
   }
 }
 
-document.querySelector("#sign-out").addEventListener("click", signOut);
-document.querySelector("#session-retry").addEventListener("click", checkSession);
-stationRetry.addEventListener("click", loadStations);
-checkSession();
+$("#sign-out").onclick = out;
+$("#session-retry").onclick = init;
+retry.onclick = load;
+init();

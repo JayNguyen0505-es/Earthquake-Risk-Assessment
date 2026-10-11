@@ -148,7 +148,9 @@ docker compose -f vasteq/deployment/compose.yaml up -d --wait nginx
 Open `http://localhost:28080/`. `/api/` requests are proxied to the backend,
 preserving paths, query strings, request bodies, and authorization headers.
 Frontend and API therefore share the browser's origin. Missing static files
-return 404. The health check tests the static home page independently of the API.
+return 404. nginx expands HTML SSI includes from `public/inc/`; direct requests
+to `/inc/` return 404. API responses bypass SSI. JavaScript remains in ES modules.
+The health check tests the rendered home page independently of the API.
 
 This setup uses [Docker host networking](https://docs.docker.com/engine/network/drivers/host/)
 on Linux to reach the backend's loopback listener. Port 28080 is configured in

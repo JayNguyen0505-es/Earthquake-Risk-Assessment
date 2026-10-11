@@ -1,281 +1,208 @@
-import { userApi } from "./api.js";
-import { getToken, clearSession } from "./session.js";
+import { user } from "./api.js";
+import { token, logout } from "./session.js";
+import { $, $$, el, msg, busy } from "./ui.js";
 
-const $ = (selector) => document.querySelector(selector);
-const panel = $("#user-management");
-const tbody = $("#users-body");
-const userDialog = $("#user-dialog");
-const deleteDialog = $("#delete-dialog");
-const userForm = $("#user-form");
-const pageSize = 20;
-let users = [];
+const panel = $("#users");
+const rows = $("#rows");
+const form = $("#edit-form");
+const editBox = $("#edit-box");
+const delBox = $("#del-box");
+const limit = 20;
 let offset = 0;
 let total = 0;
-let selectedUser = null;
+let selected = null;
 let saving = false;
 let loading = false;
 
-function signOut() {
-  clearSession();
-  window.location.replace("login.html");
-}
-
-function showError(element, message) {
-  element.textContent = message;
-  element.hidden = !message;
-}
-
-function toast(message, error = false) {
-  const notification = document.createElement("div");
-  notification.className = `notification${error ? " error" : ""}`;
-  const text = document.createElement("p");
-  text.textContent = message;
-  const close = document.createElement("button");
+function toast(text, bad = false) {
+  const box = el("div", "", `toast-item${bad ? " error" : ""}`);
+  const close = el("button", "×", "btn");
   close.type = "button";
-  close.className = "btn";
   close.setAttribute("aria-label", "Dismiss notification");
-  close.textContent = "×";
-  notification.append(text, close);
-  $("#toast-region").append(notification);
-  // Pause automatic dismissal while the notification is being read or focused.
+  box.append(el("p", text), close);
+  $("#toasts").append(box);
   let timer;
-  const dismiss = () => { clearTimeout(timer); notification.remove(); };
-  const resume = () => { clearTimeout(timer); timer = setTimeout(dismiss, error ? 10000 : 6000); };
-  notification.addEventListener("mouseenter", () => clearTimeout(timer));
-  notification.addEventListener("mouseleave", resume);
-  notification.addEventListener("focusin", () => clearTimeout(timer));
-  notification.addEventListener("focusout", resume);
-  close.addEventListener("click", dismiss);
-  resume();
+  const stop = () => clearTimeout(timer);
+  const hide = () => { stop(); box.remove(); };
+  const start = () => { stop(); timer = setTimeout(hide, bad ? 10000 : 6000); };
+  box.onmouseenter = box.onfocusin = stop;
+  box.onmouseleave = box.onfocusout = start;
+  close.onclick = hide;
+  start();
 }
 
-function accessDenied() {
+function deny() {
   panel.hidden = true;
-  tbody.replaceChildren();
-  users = [];
-  userDialog.close();
-  deleteDialog.close();
+  rows.replaceChildren();
+  editBox.close();
+  delBox.close();
   $("#access-status").textContent = "Administrator access is required to manage users.";
   $("#retry-access").hidden = true;
 }
 
-function handleAccessError(error) {
-  if (error.status === 401) { signOut(); return true; }
-  if (error.status === 403) { accessDenied(); return true; }
+function auth(err) {
+  if (err.status === 401) { logout(); return true; }
+  if (err.status === 403) { deny(); return true; }
   return false;
 }
 
-function errorMessage(error) {
-  if (error.code === "email_exists") return "An account with this email already exists.";
-  if (error.code === "last_admin") return "The last active administrator cannot be deleted, disabled, or changed to another role.";
-  if (error.status === 404) return "This account no longer exists. Refresh the user list and try again.";
-  return error.message || "The request could not be completed. Please try again.";
+function error(err) {
+  if (err.code === "email_exists") return "An account with this email already exists.";
+  if (err.code === "last_admin") return "The last active administrator cannot be deleted, disabled, or changed to another role.";
+  if (err.status === 404) return "This account no longer exists. Refresh the user list and try again.";
+  return err.message;
 }
 
-function updatePagination() {
-  $("#previous-page").disabled = loading || offset === 0;
-  $("#next-page").disabled = loading || offset + pageSize >= total;
+function row(data) {
+  const node = $("#user-row").content.firstElementChild.cloneNode(true);
+  $("[data-id]", node).textContent = data.id;
+  $("[data-name]", node).textContent = data.displayName;
+  $("[data-email]", node).textContent = data.email;
+  if (!data.enabled) $("[data-name]", node).append(el("span", "Disabled", "disabled-tag"));
+  const editBtn = $(".edit-btn", node);
+  const delBtn = $(".del-btn", node);
+  editBtn.setAttribute("aria-label", `Edit ${data.displayName}`);
+  delBtn.setAttribute("aria-label", `Delete ${data.displayName}`);
+  editBtn.onclick = () => edit(data);
+  delBtn.onclick = () => del(data);
+  delBtn.disabled = !data.enabled;
+  return node;
+}
+
+function pages() {
+  $("#prev").disabled = loading || offset === 0;
+  $("#next").disabled = loading || offset + limit >= total;
   $("#add-user").disabled = loading;
 }
 
-function userRow(user) {
-  const row = document.createElement("tr");
-  for (const value of [user.id, user.displayName, user.email]) {
-    const cell = document.createElement("td");
-    cell.textContent = value;
-    row.append(cell);
-  }
-  if (!user.enabled) {
-    const badge = document.createElement("span");
-    badge.className = "disabled-label";
-    badge.textContent = "Disabled";
-    row.children[1].append(badge);
-  }
-  const actions = document.createElement("td");
-  actions.className = "actions-column";
-  for (const action of ["Edit", "Delete"]) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `btn row-action${action === "Delete" ? " delete-action" : ""}`;
-    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    icon.setAttribute("viewBox", "0 0 24 24");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute("focusable", "false");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    // Material Design edit and delete icons, embedded to avoid external fonts.
-    path.setAttribute("d", action === "Edit"
-      ? "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-      : "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z");
-    icon.append(path);
-    button.append(icon);
-    button.title = action;
-    button.setAttribute("aria-label", `${action} ${user.displayName}`);
-    button.disabled = action === "Delete" && !user.enabled;
-    button.addEventListener("click", () => action === "Edit" ? openUser(user) : openDelete(user));
-    actions.append(button);
-  }
-  row.append(actions);
-  return row;
-}
-
-async function loadUsers() {
+async function load() {
   if (loading) return;
   loading = true;
-  updatePagination();
-  tbody.replaceChildren();
+  pages();
+  rows.replaceChildren();
   $("#list-status").textContent = "Loading users…";
   $("#retry-list").hidden = true;
-  showError($("#page-error"), "");
+  msg($("#page-error"));
   try {
-    let data = await userApi.list({ offset, limit: pageSize });
-    // A concurrent deletion may have emptied the last page.
-    if (Number.isInteger(data?.total) && data.total > 0 && offset >= data.total) {
-      offset = Math.floor((data.total - 1) / pageSize) * pageSize;
-      data = await userApi.list({ offset, limit: pageSize });
+    let data = await user.list({ offset, limit });
+    if (data.total && offset >= data.total) {
+      offset = Math.floor((data.total - 1) / limit) * limit;
+      data = await user.list({ offset, limit });
     }
-    if (!Array.isArray(data?.items) || !Number.isInteger(data.total) || data.total < 0 ||
-        data.items.some(user => !Number.isInteger(user.id) || typeof user.displayName !== "string" ||
-          typeof user.email !== "string" || typeof user.enabled !== "boolean"))
-      throw new Error("Unable to read the user list. Please try again.");
-    users = data.items;
     total = data.total;
-    tbody.replaceChildren(...users.map(userRow));
-    if (total === 0) {
+    rows.replaceChildren(...data.items.map(row));
+    if (!total) {
       offset = 0;
-      const row = document.createElement("tr");
-      const cell = document.createElement("td");
+      const empty = el("tr");
+      const cell = el("td", "No users found. Add a user to get started.");
       cell.colSpan = 4;
-      cell.textContent = "No users found. Add a user to get started.";
-      row.append(cell);
-      tbody.append(row);
+      empty.append(cell);
+      rows.append(empty);
     }
-    $("#list-status").textContent = total ? `Showing ${offset + 1}–${offset + users.length} of ${total} users` : "0 users";
-  } catch (error) {
-    if (handleAccessError(error)) return;
-    users = [];
+    $("#list-status").textContent = total ? `Showing ${offset + 1}–${offset + data.items.length} of ${total} users` : "0 users";
+  } catch (err) {
+    if (auth(err)) return;
     total = 0;
     $("#list-status").textContent = "Users could not be loaded.";
-    showError($("#page-error"), errorMessage(error));
+    msg($("#page-error"), error(err));
     $("#retry-list").hidden = false;
   } finally {
     loading = false;
-    updatePagination();
+    pages();
   }
 }
 
-function openUser(user = null) {
-  selectedUser = user;
-  userForm.reset();
-  showError($("#user-form-error"), "");
-  $("#user-dialog-title").textContent = user ? "Edit user" : "Add user";
-  $("#save-user").textContent = user ? "Save changes" : "Add user";
-  $("#user-name").value = user?.displayName || "";
-  $("#user-email").value = user?.email || "";
-  $("#user-role").value = user?.role || "user";
-  $("#user-enabled").checked = user?.enabled ?? true;
-  $("#enabled-group").hidden = !user;
-  $("#password-group").hidden = Boolean(user);
-  $("#user-password").required = !user;
-  $("#user-password").disabled = Boolean(user);
-  userDialog.showModal();
+function edit(data = null) {
+  selected = data;
+  form.reset();
+  msg($("#edit-error"));
+  $("#edit-title").textContent = data ? "Edit user" : "Add user";
+  $("#save-user").textContent = data ? "Save changes" : "Add user";
+  $("#name").value = data?.displayName || "";
+  $("#email").value = data?.email || "";
+  $("#role").value = data?.role || "user";
+  $("#enabled").checked = data?.enabled ?? true;
+  $("#enabled-group").hidden = !data;
+  $("#pass-group").hidden = !!data;
+  $("#pass").required = !data;
+  editBox.showModal();
 }
 
-function openDelete(user) {
-  selectedUser = user;
-  $("#delete-user-name").textContent = `${user.displayName} (${user.email})`;
-  showError($("#delete-error"), "");
-  deleteDialog.showModal();
+function del(data) {
+  selected = data;
+  $("#del-name").textContent = `${data.displayName} (${data.email})`;
+  msg($("#del-error"));
+  delBox.showModal();
 }
 
-function setSaving(dialog, busy) {
-  saving = busy;
-  dialog.setAttribute("aria-busy", String(busy));
-  for (const control of dialog.querySelectorAll("input, select, button")) {
-    if (busy) { control.dataset.wasDisabled = String(control.disabled); control.disabled = true; }
-    else { control.disabled = control.dataset.wasDisabled === "true"; delete control.dataset.wasDisabled; }
-  }
-}
-
-userForm.addEventListener("submit", async event => {
-  event.preventDefault();
+async function run(box, task, text) {
   if (saving) return;
-  const displayName = $("#user-name").value.trim();
-  const email = $("#user-email").value.trim().toLowerCase();
-  if (!displayName || !email) {
-    showError($("#user-form-error"), "Enter a name and email.");
-    return;
-  }
-  const editing = Boolean(selectedUser);
-  const account = { displayName, email, role: $("#user-role").value };
-  if (editing) account.enabled = $("#user-enabled").checked;
-  else account.password = $("#user-password").value;
-  setSaving(userDialog, true);
-  showError($("#user-form-error"), "");
+  saving = true;
+  busy(box, true);
+  msg($(".notice-error", box));
   try {
-    if (editing) await userApi.update(selectedUser.id, account);
-    else await userApi.create(account);
-    userDialog.close();
-    userForm.reset();
-    toast(editing ? "User updated successfully." : "User added successfully.");
+    await task();
+    box.close();
+    toast(text);
     $("#add-user").focus();
-    await loadUsers();
-  } catch (error) {
-    const message = errorMessage(error);
-    toast(message, true);
-    if (!handleAccessError(error)) showError($("#user-form-error"), message);
-  } finally { setSaving(userDialog, false); }
-});
-
-$("#delete-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  if (saving || !selectedUser) return;
-  setSaving(deleteDialog, true);
-  showError($("#delete-error"), "");
-  try {
-    await userApi.remove(selectedUser.id);
-    deleteDialog.close();
-    toast("User deleted successfully. Their account is now disabled.");
-    $("#add-user").focus();
-    await loadUsers();
-  } catch (error) {
-    const message = errorMessage(error);
-    toast(message, true);
-    if (!handleAccessError(error)) showError($("#delete-error"), message);
-  } finally { setSaving(deleteDialog, false); }
-});
-
-for (const dialog of [userDialog, deleteDialog]) {
-  dialog.addEventListener("cancel", event => { if (saving) event.preventDefault(); });
-  for (const close of dialog.querySelectorAll("[data-close]")) {
-    close.addEventListener("click", () => { if (!saving) dialog.close(); });
+    await load();
+  } catch (err) {
+    toast(error(err), true);
+    if (!auth(err)) msg($(".notice-error", box), error(err));
+  } finally {
+    saving = false;
+    busy(box, false);
   }
-  // Clear the entered password when an add dialog is dismissed.
-  dialog.addEventListener("close", () => { $("#user-password").value = ""; });
 }
 
-async function initialize() {
-  if (!getToken()) { signOut(); return; }
+form.onsubmit = e => {
+  e.preventDefault();
+  const data = {
+    displayName: $("#name").value.trim(),
+    email: $("#email").value.trim().toLowerCase(),
+    role: $("#role").value
+  };
+  if (!data.displayName || !data.email) return msg($("#edit-error"), "Enter a name and email.");
+  if (selected) data.enabled = $("#enabled").checked;
+  else data.password = $("#pass").value;
+  run(editBox, () => selected ? user.edit(selected.id, data) : user.add(data),
+    selected ? "User updated successfully." : "User added successfully.");
+};
+
+$("#del-form").onsubmit = e => {
+  e.preventDefault();
+  run(delBox, () => user.del(selected.id), "User deleted successfully. Their account is now disabled.");
+};
+
+for (const box of [editBox, delBox]) {
+  box.oncancel = e => { if (saving) e.preventDefault(); };
+  box.onclose = () => { $("#pass").value = ""; };
+  for (const btn of $$("[data-close]", box)) btn.onclick = () => box.close();
+}
+
+async function init() {
+  if (!token()) return logout();
   $("#access-status").textContent = "Checking administrator access…";
   $("#retry-access").hidden = true;
-  showError($("#page-error"), "");
+  msg($("#page-error"));
   try {
-    const viewer = await userApi.me();
-    if (viewer.role !== "admin") { accessDenied(); return; }
+    const data = await user.me();
+    if (data.role !== "admin") return deny();
     $("#access-status").textContent = "";
     panel.hidden = false;
-    await loadUsers();
-  } catch (error) {
-    if (handleAccessError(error)) return;
+    await load();
+  } catch (err) {
+    if (auth(err)) return;
     $("#access-status").textContent = "Your session could not be checked.";
-    showError($("#page-error"), errorMessage(error));
+    msg($("#page-error"), error(err));
     $("#retry-access").hidden = false;
   }
 }
 
-$("#add-user").addEventListener("click", () => openUser());
-$("#previous-page").addEventListener("click", () => { offset = Math.max(0, offset - pageSize); loadUsers(); });
-$("#next-page").addEventListener("click", () => { offset += pageSize; loadUsers(); });
-$("#retry-list").addEventListener("click", loadUsers);
-$("#retry-access").addEventListener("click", initialize);
-$("#sign-out").addEventListener("click", signOut);
-initialize();
+$("#add-user").onclick = () => edit();
+$("#prev").onclick = () => { offset -= limit; load(); };
+$("#next").onclick = () => { offset += limit; load(); };
+$("#retry-list").onclick = load;
+$("#retry-access").onclick = init;
+$("#sign-out").onclick = logout;
+init();
