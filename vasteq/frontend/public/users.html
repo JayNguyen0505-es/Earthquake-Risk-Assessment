@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a73e8">
+  <title>User management · VAST-Earthquake</title>
+  <link rel="stylesheet" href="assets/vendor/sb-admin-2/sb-admin-2.min.css">
+  <link rel="stylesheet" href="assets/css/auth.css">
+  <link rel="stylesheet" href="assets/css/home.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+  <script type="module" src="assets/js/users.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="container site-nav">
+      <a class="brand site-brand" href="index.html" aria-label="VAST-Earthquake home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M4 17h6l3-8 5 15 3-7h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span>VAST<span class="brand-divider">·</span>Earthquake</span>
+      </a>
+      <nav class="header-actions" aria-label="Account navigation">
+        <a class="text-action" href="index.html">Home</a>
+        <a class="text-action" href="account.html">My account</a>
+        <button id="sign-out" class="btn secondary-action compact-action" type="button">Sign out</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="container admin-content" tabindex="-1">
+    <p class="eyebrow">Administration</p>
+    <h1>User management</h1>
+    <p class="admin-description">Manage accounts and access to VAST-Earthquake.</p>
+    <noscript><p class="form-alert">Enable JavaScript to manage users.</p></noscript>
+    <p id="access-status" role="status">Checking administrator access…</p>
+    <p id="page-error" class="form-alert" role="alert" hidden></p>
+    <button id="retry-access" class="btn secondary-action" type="button" hidden>Try again</button>
+
+    <section id="user-management" class="card management-card" aria-labelledby="users-title" hidden>
+      <div class="management-toolbar">
+        <h2 id="users-title">Users</h2>
+        <button id="add-user" class="btn primary-action compact-action" type="button">+ Add user</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table user-table">
+          <caption class="sr-only">User accounts with edit and delete actions</caption>
+          <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">Email</th><th scope="col" class="actions-column">Actions</th></tr></thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <p id="list-status" role="status"></p>
+        <button id="retry-list" class="btn text-action" type="button" hidden>Retry loading</button>
+        <nav class="pagination-actions" aria-label="User pages">
+          <button id="previous-page" class="btn secondary-action compact-action" type="button" disabled>Previous</button>
+          <button id="next-page" class="btn secondary-action compact-action" type="button" disabled>Next</button>
+        </nav>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="user-dialog" class="admin-dialog" aria-labelledby="user-dialog-title">
+    <form id="user-form">
+      <header class="dialog-header"><h2 id="user-dialog-title">Add user</h2><button class="btn close-dialog" type="button" data-close aria-label="Close user dialog">×</button></header>
+      <div class="dialog-body">
+        <p id="user-form-error" class="form-alert" role="alert" hidden></p>
+        <div class="field-group outlined-field"><label for="user-name">Name</label><input id="user-name" name="displayName" class="form-control" required maxlength="120" autocomplete="off" autofocus></div>
+        <div class="field-group outlined-field"><label for="user-email">Email</label><input id="user-email" name="email" class="form-control" type="email" required maxlength="254" autocomplete="off"></div>
+        <div id="password-group" class="field-group">
+          <div class="outlined-field"><label for="user-password">Password</label><input id="user-password" name="password" class="form-control" type="password" minlength="12" maxlength="128" autocomplete="new-password" aria-describedby="password-help"></div>
+          <p id="password-help" class="field-help">Use 12–128 characters.</p>
+        </div>
+        <div class="field-group outlined-field"><label for="user-role">Role</label><select id="user-role" name="role" class="form-control"><option value="user">User</option><option value="admin">Admin</option><option value="guest">Guest</option></select></div>
+        <div id="enabled-group" class="enabled-field"><label><input id="user-enabled" type="checkbox"> Account enabled</label></div>
+      </div>
+      <footer class="dialog-footer"><button class="btn secondary-action compact-action" type="button" data-close>Cancel</button><button id="save-user" class="btn primary-action compact-action" type="submit">Add user</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" class="admin-dialog" aria-labelledby="delete-dialog-title" aria-describedby="delete-description">
+    <form id="delete-form">
+      <header class="dialog-header"><h2 id="delete-dialog-title">Delete user?</h2><button class="btn close-dialog" type="button" data-close aria-label="Close delete dialog">×</button></header>
+      <div class="dialog-body">
+        <p id="delete-description">Delete <strong id="delete-user-name"></strong>? This disables their account and prevents sign-in. The account record is retained.</p>
+        <p id="delete-error" class="form-alert" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-footer"><button class="btn secondary-action compact-action" type="button" data-close autofocus>Cancel</button><button id="confirm-delete" class="btn danger-action compact-action" type="submit">Delete user</button></footer>
+    </form>
+  </dialog>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="false" aria-label="Notifications"></div>
+</body>
+</html>

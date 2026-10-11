@@ -81,6 +81,29 @@ retrying. Sign out removes the local token and returns to login. Tokens still
 expire according to the backend's configured lifetime, without server-side
 revocation. The full application dashboard is a later frontend step.
 
+## User management
+
+Administrators can open `/users.html` through the **Manage users** link on the
+home page. The page verifies the current account before fetching the paginated
+user table. Regular users cannot access the management controls; the backend
+also enforces administrator permissions on every management request.
+
+The table displays ID, name, email, and Edit/Delete buttons, with an Add user
+button above the table on the right. Add and edit use native modal dialogs with
+Bootstrap and Material styling. Creation collects name, email, password, and
+role; passwords follow the existing API's 12–128 character requirement. Editing
+allows changing name, email, role, and enabled status, without changing passwords.
+Deletion requires a confirmation dialog and uses the existing API's soft delete:
+the account becomes disabled, its record remains visible, and editing can enable
+it again. The last active administrator is protected by the backend.
+
+Success and failure notifications appear at the top right. Failed operations
+preserve the dialog values and show an inline error for correction or retry.
+The page supports keyboard focus, Escape to cancel, duplicate submission
+protection, empty/loading/error states, and a scrolling table on small screens.
+It uses vanilla JavaScript and native `<dialog>` elements, with no additional
+runtime libraries.
+
 ## API client
 
 `public/assets/js/api.js` follows the reusable `Api` and endpoint-specific class
@@ -103,7 +126,9 @@ adds nine checks for login validation, token storage, error handling, home
 session verification, sign out, and mobile layout. Both suites use intercepted
 API responses. `tests/test_home.py` adds eight checks for public access,
 authenticated station previews, session failures, retries, sign-out races,
-and responsive navigation.
+and responsive navigation. `tests/test_users.py` adds nine checks for admin
+access, CRUD dialogs, notifications, retries, pagination, duplicate submission
+protection, and mobile layout, also without writing database records.
 
 With the backend running, install Playwright in a separate testing environment
 and run from the repository root:

@@ -77,6 +77,13 @@ export class UserApi extends Api {
   register(account) { return this.post("/register", account, {}, { authenticated: false }); }
   login(email, password) { return this.post("/login", { email, password }, {}, { authenticated: false }); }
   me() { return this.get("/me"); }
+  list(filters = {}) {
+    const query = new URLSearchParams(filters).toString();
+    return this.get(query ? `?${query}` : "");
+  }
+  create(account) { return this.post("", account); }
+  update(id, account) { return this.patch(`/${encodeURIComponent(id)}`, account); }
+  remove(id) { return this.delete(`/${encodeURIComponent(id)}`); }
 }
 
 export const userApi = new UserApi();

@@ -14,6 +14,7 @@ function renderViewer(user) {
   viewer = user;
   for (const node of document.querySelectorAll("[data-auth-public]")) node.hidden = Boolean(user);
   for (const node of document.querySelectorAll("[data-auth-private]")) node.hidden = !user;
+  for (const node of document.querySelectorAll("[data-auth-admin]")) node.hidden = user?.role !== "admin";
   stationPreview.replaceChildren();
   stationStatus.textContent = "";
   stationError.hidden = true;
