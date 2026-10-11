@@ -7,7 +7,21 @@ a small Material-style CSS override, system fonts, and vanilla JavaScript.
 There are no CDN requests, JavaScript frameworks, or frontend build tools.
 The template's MIT license is included beside the vendor stylesheet.
 
-## Run with the backend
+## Serve with nginx
+
+The nginx Docker service serves `public/` at `http://localhost:28080/` and
+proxies `/api/` to the Java backend on `127.0.0.1:8080`. Start the backend first,
+then run from the repository root:
+
+```sh
+docker compose -f vasteq/deployment/compose.yaml up -d --wait nginx
+```
+
+See the [deployment instructions](../deployment/README.md#frontend-with-nginx)
+for configuration validation and reload commands. This Linux setup uses Docker
+host networking. Frontend edits are served directly without rebuilding Maven.
+
+## Serve directly with the backend
 
 Frontend files live in `public/`. Maven includes this directory in Quarkus's
 static resources, so the page and API share an origin:

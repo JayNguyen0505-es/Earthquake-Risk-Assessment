@@ -1,6 +1,20 @@
 name: vasteq
 
 services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ../frontend/public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:28080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   mysql:
     image: mysql:8.4
     restart: unless-stopped

@@ -1,4 +1,4 @@
-# Local MySQL
+# Local deployment
 
 This Docker Compose service runs the official MySQL 8.4 image and initializes an empty
 `vasteq` database and a separate `vasteq` application user. The approved
@@ -11,7 +11,7 @@ From the repository root:
 
 ```bash
 python3 vasteq/deployment/setup_mysql.py
-docker compose -f vasteq/deployment/compose.yaml up -d --wait
+docker compose -f vasteq/deployment/compose.yaml up -d --wait mysql
 docker compose -f vasteq/deployment/compose.yaml ps
 ```
 
@@ -109,3 +109,40 @@ application user and executes `SELECT 1` against the application database.
 
 Image initialization and `_FILE` variables follow the
 [official MySQL image documentation](https://hub.docker.com/_/mysql).
+
+## Frontend with nginx
+
+The [nginx config](nginx.conf) serves `../frontend/public` on port **28080**.
+The Compose `nginx` service mounts only the public frontend directory and its
+configuration, both read-only. Templates, tests, and backend secrets are not
+part of the document root.
+
+Start the Java backend on `127.0.0.1:8080` as described in the
+[backend README](../backend/README.md), then run from the repository root:
+
+```bash
+docker compose -f vasteq/deployment/compose.yaml run --rm --no-deps nginx nginx -t
+docker compose -f vasteq/deployment/compose.yaml up -d --wait nginx
+```
+
+Open `http://localhost:28080/`. `/api/` requests are proxied to the backend,
+preserving paths, query strings, request bodies, and authorization headers.
+Frontend and API therefore share the browser's origin. Missing static files
+return 404. The health check tests the static home page independently of the API.
+
+This setup uses [Docker host networking](https://docs.docker.com/engine/network/drivers/host/)
+on Linux to reach the backend's loopback listener. Port 28080 is configured in
+nginx itself; Compose does not publish ports for a host-networked container.
+For a backend moved into a container, change the proxy upstream and networking
+to use its service name instead.
+
+Frontend file edits take effect without a Maven rebuild. After changing nginx
+configuration, validate and reload it:
+
+```bash
+docker compose -f vasteq/deployment/compose.yaml exec nginx nginx -t
+docker compose -f vasteq/deployment/compose.yaml exec nginx nginx -s reload
+```
+
+Stop only the frontend with
+`docker compose -f vasteq/deployment/compose.yaml stop nginx`.
