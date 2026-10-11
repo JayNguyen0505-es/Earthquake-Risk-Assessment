@@ -49,8 +49,9 @@ The MySQL [deployment setup](deployment/README.md) is available, with a
 [approved eight-table database structure](backend/database/README.md). The [backend account API](backend/README.md) implements registration, JWT login,
 and account management using Hibernate ORM and MySQL JDBC. The
 [station API](deployment/api-station.md) provides inventory reads and admin-only
-station management. Frontend and model
-services will be added as implementation continues.
+station management. The [frontend account pages](frontend/README.md) are available at
+`/register.html` and `/login.html`. The public landing page is at `/index.html`,
+with a signed-in account view at `/account.html`. Model services will be added as implementation continues.
 Research and training code remain in their respective work package directories.
 Shared raw data remains in `../data/` and must not be duplicated here.
 
