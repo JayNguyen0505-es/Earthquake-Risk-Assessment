@@ -1,9 +1,29 @@
 # Local deployment
 
-This Docker Compose service runs the official MySQL 8.4 image and initializes an empty
-`vasteq` database and a separate `vasteq` application user. The approved
-eight-table schema is saved in [create_database.sql](create_database.sql);
-it is not automatically installed.
+## Start everything
+
+From the repository root:
+
+```bash
+./vasteq/deployment/start.sh
+```
+
+The script works from any directory. It starts MySQL and nginx with Docker
+Compose, then launches the Java backend in the background on `127.0.0.1:8080`.
+The frontend is available on port **28080** once the services finish starting.
+No sudo is used.
+
+It assumes database credentials, JWT keys, the database schema, and the backend
+build are already prepared. Build the backend separately with `./mvnw package`
+from `vasteq/backend` when needed. Stop an existing backend before running this
+script again; Docker Compose reuses its existing containers.
+
+The backend PID and output are saved in `.runtime/backend.pid` and
+`.runtime/backend.log` under this directory. The script only launches components;
+it does not wait for readiness.
+
+The approved eight-table schema is saved in
+[create_database.sql](create_database.sql). Apply it separately as described below.
 
 ## Start
 
