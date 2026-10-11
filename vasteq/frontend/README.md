@@ -34,6 +34,7 @@ use `auth`; each sets `submit` for the shared button label.
 ```
 
 JavaScript logic stays in ES modules; SSI shares the module script tag.
+Management pages also share `admin-nav.html`, `actions.html`, and `pager.html`.
 Includes are internal to nginx and cannot be opened directly. Edit a partial
 once to update every page that includes it. HTML changes need no reload;
 nginx configuration changes require validation and a reload or container recreation.
@@ -109,6 +110,23 @@ protection, empty/loading/error states, and a scrolling table on small screens.
 It uses vanilla JavaScript and native `<dialog>` elements, with no additional
 runtime libraries.
 
+## Station management
+
+Admins can open `/stations.html` from **Manage stations** on the home page or
+the administration tabs. The table shows ID, network/station code, name,
+province, latitude, longitude, and Material edit/delete icons. Search by name,
+filter by province or coordinate availability, and page through the results.
+The province field accepts any province, with suggestions for the study area.
+
+Add/edit dialogs include all station metadata. Network and station codes are
+required; optional blank fields are saved as `null`. Coordinates must be entered
+or cleared together. Unknown coordinates display as `—`; the CRS is never
+assumed. Instrument serial numbers retain leading zeros.
+
+Deletion requires confirmation and permanently removes the station. The API
+blocks deletion when channels reference it. Success and error toasts, inline
+errors, and retry controls follow the user-management page.
+
 ## API client
 
 `public/assets/js/api.js` follows the reusable `Api` and endpoint-specific class
@@ -142,6 +160,8 @@ authenticated station previews, session failures, retries, sign-out races,
 and responsive navigation. `tests/test_users.py` adds nine checks for admin
 access, CRUD dialogs, notifications, retries, pagination, duplicate submission
 protection, and mobile layout, also without writing database records.
+`tests/test_stations.py` adds nine checks for station CRUD, filters, coordinate
+validation, linked-channel conflicts, pagination, access control, and mobile layout.
 
 With nginx and the backend running, install Playwright in a separate testing environment
 and run from the repository root:

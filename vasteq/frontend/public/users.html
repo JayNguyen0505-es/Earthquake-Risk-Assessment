@@ -11,6 +11,7 @@
   <!--#include virtual="/inc/header.html" -->
 
   <main id="main" class="container admin-page" tabindex="-1">
+    <!--#include virtual="/inc/admin-nav.html" -->
     <p class="eyebrow">Administration</p>
     <h1>User management</h1>
     <p class="admin-text">Manage accounts and access to VAST-Earthquake.</p>
@@ -19,26 +20,19 @@
     <p id="page-error" class="notice-error" role="alert" hidden></p>
     <button id="retry-access" class="btn btn-alt" type="button" hidden>Try again</button>
 
-    <section id="users" class="card user-card" aria-labelledby="users-title" hidden>
+    <section id="users" class="card data-card" aria-labelledby="users-title" hidden>
       <div class="toolbar">
         <h2 id="users-title">Users</h2>
         <button id="add-user" class="btn btn-main btn-small" type="button">+ Add user</button>
       </div>
       <div class="table-responsive">
-        <table class="table user-table">
+        <table class="table data-table">
           <caption class="sr-only">User accounts with edit and delete actions</caption>
           <thead><tr><th scope="col">ID</th><th scope="col">Name</th><th scope="col">Email</th><th scope="col" class="actions">Actions</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <div class="table-footer">
-        <p id="list-status" role="status"></p>
-        <button id="retry-list" class="btn btn-text" type="button" hidden>Retry loading</button>
-        <nav class="pages" aria-label="User pages">
-          <button id="prev" class="btn btn-alt btn-small" type="button" disabled>Previous</button>
-          <button id="next" class="btn btn-alt btn-small" type="button" disabled>Next</button>
-        </nav>
-      </div>
+      <!--#include virtual="/inc/pager.html" -->
     </section>
   </main>
 
@@ -77,12 +71,7 @@
     <tr>
       <td data-id></td><td data-name></td><td data-email></td>
       <td class="actions">
-        <button class="btn btn-icon edit-btn" type="button" title="Edit">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-        </button>
-        <button class="btn btn-icon btn-delete del-btn" type="button" title="Delete">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-        </button>
+        <!--#include virtual="/inc/actions.html" -->
       </td>
     </tr>
   </template>

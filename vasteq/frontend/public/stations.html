@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <!--#set var="page" value="stations" -->
+  <!--#include virtual="/inc/head.html" -->
+  <title>Station management · VAST-Earthquake</title>
+  <link rel="stylesheet" href="assets/css/home.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+  <!--#include virtual="/inc/header.html" -->
+  <main id="main" class="container admin-page" tabindex="-1">
+    <!--#include virtual="/inc/admin-nav.html" -->
+    <p class="eyebrow">Administration</p>
+    <h1>Station management</h1>
+    <p class="admin-text">Manage monitoring stations and their metadata.</p>
+    <noscript><p class="notice-error">Enable JavaScript to manage stations.</p></noscript>
+    <p id="access-status" role="status">Checking administrator access…</p>
+    <p id="page-error" class="notice-error" role="alert" hidden></p>
+    <button id="retry-access" class="btn btn-alt" type="button" hidden>Try again</button>
+
+    <section id="stations" class="card data-card" aria-labelledby="stations-title" hidden>
+      <div class="toolbar">
+        <h2 id="stations-title">Stations</h2>
+        <button id="add" class="btn btn-main btn-small" type="button">+ Add station</button>
+      </div>
+      <form id="filters" class="filters" aria-label="Station filters">
+        <div class="field"><label for="search">Name search</label><input id="search" name="search" class="form-control" maxlength="120" placeholder="Station name"></div>
+        <div class="field"><label for="area">Province</label><input id="area" name="province" class="form-control" maxlength="120" list="provinces" placeholder="All provinces"></div>
+        <div class="field"><label for="coords">Coordinates</label><select id="coords" name="hasCoordinates" class="form-control"><option value="">All stations</option><option value="true">Available</option><option value="false">Missing</option></select></div>
+        <button class="btn btn-main btn-small" type="submit">Apply</button>
+        <button id="clear" class="btn btn-alt btn-small" type="button">Clear</button>
+      </form>
+      <div class="table-responsive">
+        <table class="table data-table station-table">
+          <caption class="sr-only">Stations with edit and delete actions</caption>
+          <thead><tr><th scope="col">ID</th><th scope="col">Station</th><th scope="col">Name</th><th scope="col">Province</th><th scope="col">Latitude</th><th scope="col">Longitude</th><th scope="col" class="actions">Actions</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <!--#include virtual="/inc/pager.html" -->
+    </section>
+  </main>
+
+  <dialog id="edit-box" class="dialog station-dialog" aria-labelledby="edit-title">
+    <form id="edit-form">
+      <header class="dialog-head"><h2 id="edit-title">Add station</h2><button class="btn dialog-close" type="button" data-close aria-label="Close station dialog">×</button></header>
+      <div class="dialog-body">
+        <p id="edit-error" class="notice-error" role="alert" hidden></p>
+        <fieldset class="field-grid">
+          <legend>Identity</legend>
+          <div class="field"><label for="network">Network code *</label><input id="network" name="networkCode" class="form-control" required maxlength="2" pattern="[\x21-\x7E]+" title="1–2 ASCII characters, without spaces" autofocus></div>
+          <div class="field"><label for="code">Station code *</label><input id="code" name="stationCode" class="form-control" required maxlength="5" pattern="[\x21-\x7E]+" title="1–5 ASCII characters, without spaces"></div>
+          <div class="field wide"><label for="name">Station name</label><input id="name" name="name" class="form-control" maxlength="120"></div>
+        </fieldset>
+        <fieldset class="field-grid">
+          <legend>Location</legend>
+          <div class="field"><label for="city">City</label><input id="city" name="city" class="form-control" maxlength="120"></div>
+          <div class="field"><label for="province">Province</label><input id="province" name="province" class="form-control" maxlength="120" list="provinces"></div>
+          <p id="coord-help" class="hint wide">Enter both coordinates, or leave both blank when unknown.</p>
+          <div class="field"><label for="lat">Latitude</label><input id="lat" name="latitude" class="form-control" type="number" min="-90" max="90" step="0.000001" aria-describedby="coord-help"></div>
+          <div class="field"><label for="lng">Longitude</label><input id="lng" name="longitude" class="form-control" type="number" min="-180" max="180" step="0.000001" aria-describedby="coord-help"></div>
+          <div class="field"><label for="elevation">Elevation (m)</label><input id="elevation" name="elevationM" class="form-control" type="number" min="-9999999.999" max="9999999.999" step="0.001"></div>
+          <div class="field"><label for="crs">Coordinate CRS</label><input id="crs" name="coordinateCrs" class="form-control" maxlength="64" placeholder="If known"></div>
+        </fieldset>
+        <fieldset class="field-grid">
+          <legend>Instrument</legend>
+          <div class="field"><label for="type">Type</label><input id="type" name="instrumentType" class="form-control" maxlength="64"></div>
+          <div class="field"><label for="serial">Serial number</label><input id="serial" name="instrumentSerial" class="form-control" maxlength="64"></div>
+        </fieldset>
+        <fieldset class="field-grid">
+          <legend>Source</legend>
+          <div class="field wide"><label for="uri">Metadata location</label><input id="uri" name="metadataUri" class="form-control" maxlength="1024" placeholder="URL or file reference"></div>
+          <div class="field wide"><label for="source">Metadata source</label><input id="source" name="metadataSource" class="form-control" maxlength="255"></div>
+        </fieldset>
+      </div>
+      <footer class="dialog-foot"><button class="btn btn-alt btn-small" type="button" data-close>Cancel</button><button id="save" class="btn btn-main btn-small" type="submit">Add station</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="del-box" class="dialog" aria-labelledby="del-title" aria-describedby="del-text">
+    <form id="del-form">
+      <header class="dialog-head"><h2 id="del-title">Delete station?</h2><button class="btn dialog-close" type="button" data-close aria-label="Close delete dialog">×</button></header>
+      <div class="dialog-body">
+        <p id="del-text">Permanently delete <strong id="del-name"></strong>? Stations with linked channels cannot be deleted.</p>
+        <p id="del-error" class="notice-error" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-foot"><button class="btn btn-alt btn-small" type="button" data-close autofocus>Cancel</button><button id="delete" class="btn btn-danger btn-small" type="submit">Delete station</button></footer>
+    </form>
+  </dialog>
+
+  <datalist id="provinces"><option value="Sơn La"><option value="Điện Biên"><option value="Lai Châu"></datalist>
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false" aria-label="Notifications"></div>
+  <template id="station-row">
+    <tr>
+      <td data-id></td><td data-code></td><td data-name></td><td data-province></td><td data-lat></td><td data-lng></td>
+      <td class="actions"><!--#include virtual="/inc/actions.html" --></td>
+    </tr>
+  </template>
+</body>
+</html>

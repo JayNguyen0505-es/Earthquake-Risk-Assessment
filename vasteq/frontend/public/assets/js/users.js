@@ -1,6 +1,6 @@
 import { user } from "./api.js";
 import { token, logout } from "./session.js";
-import { $, $$, el, msg, busy } from "./ui.js";
+import { $, $$, el, msg, busy, toast } from "./ui.js";
 
 const panel = $("#users");
 const rows = $("#rows");
@@ -13,23 +13,6 @@ let total = 0;
 let selected = null;
 let saving = false;
 let loading = false;
-
-function toast(text, bad = false) {
-  const box = el("div", "", `toast-item${bad ? " error" : ""}`);
-  const close = el("button", "×", "btn");
-  close.type = "button";
-  close.setAttribute("aria-label", "Dismiss notification");
-  box.append(el("p", text), close);
-  $("#toasts").append(box);
-  let timer;
-  const stop = () => clearTimeout(timer);
-  const hide = () => { stop(); box.remove(); };
-  const start = () => { stop(); timer = setTimeout(hide, bad ? 10000 : 6000); };
-  box.onmouseenter = box.onfocusin = stop;
-  box.onmouseleave = box.onfocusout = start;
-  close.onclick = hide;
-  start();
-}
 
 function deny() {
   panel.hidden = true;
