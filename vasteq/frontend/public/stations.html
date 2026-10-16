@@ -24,13 +24,7 @@
         <h2 id="stations-title">Stations</h2>
         <button id="add" class="btn btn-main btn-small" type="button">+ Add station</button>
       </div>
-      <form id="filters" class="filters" aria-label="Station filters">
-        <div class="field"><label for="search">Name search</label><input id="search" name="search" class="form-control" maxlength="120" placeholder="Station name"></div>
-        <div class="field"><label for="area">Province</label><input id="area" name="province" class="form-control" maxlength="120" list="provinces" placeholder="All provinces"></div>
-        <div class="field"><label for="coords">Coordinates</label><select id="coords" name="hasCoordinates" class="form-control"><option value="">All stations</option><option value="true">Available</option><option value="false">Missing</option></select></div>
-        <button class="btn btn-main btn-small" type="submit">Apply</button>
-        <button id="clear" class="btn btn-alt btn-small" type="button">Clear</button>
-      </form>
+      <!--#include virtual="/inc/station-filters.html" -->
       <div class="table-responsive">
         <table class="table data-table station-table">
           <caption class="sr-only">Stations with edit and delete actions</caption>
@@ -89,7 +83,6 @@
     </form>
   </dialog>
 
-  <datalist id="provinces"><option value="Sơn La"><option value="Điện Biên"><option value="Lai Châu"></datalist>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false" aria-label="Notifications"></div>
   <template id="station-row">
     <tr>

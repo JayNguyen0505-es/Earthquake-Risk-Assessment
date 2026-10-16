@@ -5,7 +5,8 @@ are available at `/register.html`, `/login.html`, and `/account.html`.
 They use the local SB Admin 2 Bootstrap stylesheet from `templates/sbadmin2.zip`,
 a small Material-style CSS override, system fonts, and vanilla JavaScript.
 There are no CDN requests, JavaScript frameworks, or frontend build tools.
-The template's MIT license is included beside the vendor stylesheet.
+The template's MIT license is included beside the vendor stylesheet. The station
+map also uses a local copy of Leaflet 1.9.4 with its BSD license.
 
 ## Serve with nginx
 
@@ -35,6 +36,7 @@ use `auth`; each sets `submit` for the shared button label.
 
 JavaScript logic stays in ES modules; SSI shares the module script tag.
 Management pages also share `admin-nav.html`, `actions.html`, and `pager.html`.
+Station management and the map share `station-filters.html`.
 Includes are internal to nginx and cannot be opened directly. Edit a partial
 once to update every page that includes it. HTML changes need no reload;
 nginx configuration changes require validation and a reload or container recreation.
@@ -127,6 +129,27 @@ Deletion requires confirmation and permanently removes the station. The API
 blocks deletion when channels reference it. Success and error toasts, inline
 errors, and retry controls follow the user-management page.
 
+## Station map
+
+Signed-in users can open `/map.html` from **Station map** on the home page.
+Admins also have a **Map** tab in the administration navigation. The page uses
+[Leaflet 1.9.4](https://leafletjs.com/download.html), served locally from
+`public/assets/vendor/leaflet/`, and OpenStreetMap raster tiles with visible
+[attribution](https://operations.osmfoundation.org/policies/tiles/).
+The basemap needs internet access; station markers remain usable if tiles fail.
+
+Name, province, and coordinate filters match station management. The page reads
+all matching API pages, 100 records at a time, and fits the map to their locations.
+Select a marker or use **Go to station** to view its name, province, city,
+coordinates, elevation, CRS, and instrument. **Fit stations** restores the full
+view; **Refresh** reloads metadata after changes while preserving filters.
+
+Missing coordinates are counted and never plotted at a substitute location.
+Zero coordinates are valid. Coordinates are displayed as reported, without
+datum conversion, and an unspecified CRS is flagged in the summary and popup.
+No station metadata is changed. The map calls the existing authenticated read
+API; adding, editing, and deleting stations remain administrator actions.
+
 ## API client
 
 `public/assets/js/api.js` follows the reusable `Api` and endpoint-specific class
@@ -145,7 +168,7 @@ Use short, clear names such as `load`, `edit`, `data`, and `err`. Keep markup in
 HTML, share small helpers in `ui.js`, and use `auth.js` for both account forms.
 Avoid runtime assertions, response-shape checks, and unused abstractions. Keep
 input validation, request errors, access controls, and accessible labels.
-The vendor stylesheet stays as distributed.
+Vendor files stay as distributed.
 
 ## Browser tests
 
@@ -162,6 +185,10 @@ access, CRUD dialogs, notifications, retries, pagination, duplicate submission
 protection, and mobile layout, also without writing database records.
 `tests/test_stations.py` adds nine checks for station CRUD, filters, coordinate
 validation, linked-channel conflicts, pagination, access control, and mobile layout.
+`tests/test_map.py` checks loading every API page, filters, missing and zero
+coordinates, safe popup text, keyboard selection, tile failures, session access,
+retries, navigation, and mobile layout. API calls and map tiles are intercepted;
+these tests neither change station records nor download external tiles.
 
 With nginx and the backend running, install Playwright in a separate testing environment
 and run from the repository root:

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <!--#set var="page" value="map" -->
+  <!--#include virtual="/inc/head.html" -->
+  <title>Station map · VAST-Earthquake</title>
+  <link rel="stylesheet" href="assets/css/home.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="assets/css/map.css">
+  <script src="assets/vendor/leaflet/leaflet.js"></script>
+</head>
+<body>
+  <!--#include virtual="/inc/header.html" -->
+  <main id="main" class="container admin-page" tabindex="-1">
+    <div id="admin-nav" hidden><!--#include virtual="/inc/admin-nav.html" --></div>
+    <p class="eyebrow">Monitoring network</p>
+    <h1>Station map</h1>
+    <p class="admin-text">Explore station locations. Select a marker to view its details.</p>
+    <noscript><p class="notice-error">Enable JavaScript to view the map.</p></noscript>
+    <p id="access-status" role="status">Checking your session…</p>
+    <p id="page-error" class="notice-error" role="alert" hidden></p>
+    <button id="retry-access" class="btn btn-alt" type="button" hidden>Try again</button>
+
+    <section id="stations" class="card data-card" aria-labelledby="map-title" hidden>
+      <div class="toolbar map-toolbar">
+        <h2 id="map-title">Station locations</h2>
+        <div class="map-actions">
+          <button id="fit" class="btn btn-alt btn-small" type="button" disabled>Fit stations</button>
+          <button id="refresh" class="btn btn-alt btn-small" type="button">Refresh</button>
+        </div>
+      </div>
+      <!--#include virtual="/inc/station-filters.html" -->
+      <div class="map-bar">
+        <p id="map-status" role="status" aria-live="polite">Loading stations…</p>
+        <div class="field"><label for="focus">Go to station</label><select id="focus" class="form-control" disabled><option value="">Choose a station</option></select></div>
+      </div>
+      <div id="tile-note" class="map-note" role="status" hidden>Basemap unavailable. Station markers are still shown. <button id="retry-tiles" class="btn-text" type="button">Retry basemap</button></div>
+      <div id="map" class="station-map" role="region" aria-label="Station locations map"></div>
+      <div class="map-foot">
+        <p id="empty" hidden></p>
+        <p>Coordinates are displayed as reported by the source.</p>
+        <p id="crs-note" hidden></p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

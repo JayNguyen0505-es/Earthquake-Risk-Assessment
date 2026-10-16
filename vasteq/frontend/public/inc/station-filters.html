@@ -1,0 +1,8 @@
+<form id="filters" class="filters" aria-label="Station filters">
+  <div class="field"><label for="search">Name search</label><input id="search" name="search" class="form-control" maxlength="120" placeholder="Station name"></div>
+  <div class="field"><label for="area">Province</label><input id="area" name="province" class="form-control" maxlength="120" list="provinces" placeholder="All provinces"></div>
+  <div class="field"><label for="coords">Coordinates</label><select id="coords" name="hasCoordinates" class="form-control"><option value="">All stations</option><option value="true">Available</option><option value="false">Missing</option></select></div>
+  <button class="btn btn-main btn-small" type="submit">Apply</button>
+  <button id="clear" class="btn btn-alt btn-small" type="button">Clear</button>
+</form>
+<datalist id="provinces"><option value="Sơn La"><option value="Điện Biên"><option value="Lai Châu"></datalist>
