@@ -26,8 +26,9 @@ Source code for this work package should be located in ```./511/``` folder.
 See [511/README.md](511/README.md) for setup, waveform inspection, and the initial research sequence.
 
 ## 5.1.2
-We are going to build, train, and evaluate machine learning, deep learning models foor estimation of sil vibration.
-Source code for this work package should be located in ```./512/``` folder
+We are going to build, train, and evaluate machine learning, deep learning models for estimation of soil vibration (PGA, PSA).
+Source code for this work package should be located in ```./512/``` folder.
+See [512/README.md](512/README.md): open-data flatfile (USGS ShakeMap / NGA-West2), GMPE baseline vs. ML models, scenario shaking maps for the three cities.
 
 Work package 6
 ====================

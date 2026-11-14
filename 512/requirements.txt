@@ -1,0 +1,10 @@
+numpy>=1.26,<3
+pandas>=2.1
+scikit-learn>=1.4
+scipy>=1.11
+matplotlib>=3.8
+joblib>=1.3
+openpyxl>=3.1
+requests>=2.31
+# optional: GeoTIFF output and Vs30 sampling
+rasterio>=1.3
