@@ -1,0 +1,23 @@
+{
+  "_note": "Scenario parameters are PLACEHOLDERS from public press/encyclopaedic sources (rounded). Replace lat/lon/depth/mag with the Institute's verified catalogue (checklist item B2/B3) and set verified=true before using the maps for anything official. City bboxes enclose the 20 stations with a margin; adjust to the official study boundary.",
+  "grid_step_deg": 0.005,
+  "cities": {
+    "son_la":    {"name": "TP. Sơn La",      "bbox": [103.80, 21.17, 104.07, 21.42]},
+    "dien_bien": {"name": "TP. Điện Biên Phủ", "bbox": [102.92, 21.30, 103.11, 21.46]},
+    "lai_chau":  {"name": "TP. Lai Châu",    "bbox": [103.36, 22.32, 103.60, 22.47]}
+  },
+  "scenarios": {
+    "dien_bien_1935": {"name": "Điện Biên 1935-11-01", "lat": 21.45, "lon": 103.10, "depth_km": 20, "mag": 6.75, "mech": "SS", "verified": false,
+                       "comment": "Sông Mã fault zone; Ms 6.75 commonly quoted; epicentre uncertain"},
+    "tuan_giao_1983": {"name": "Tuần Giáo 1983-06-24", "lat": 21.72, "lon": 103.42, "depth_km": 23, "mag": 6.7, "mech": "SS", "verified": false,
+                       "comment": "Ms 6.7; depth ~20-25 km in literature"},
+    "dien_bien_2001": {"name": "Điện Biên 2001-02-19", "lat": 21.37, "lon": 102.97, "depth_km": 12, "mag": 5.3, "mech": "SS", "verified": false,
+                       "comment": "Ms 5.3, Lai Châu-Điện Biên fault; heavy damage in Điện Biên Phủ"},
+    "moc_chau_2020": {"name": "Mộc Châu 2020-07-27", "lat": 20.87, "lon": 104.68, "depth_km": 10, "mag": 5.3, "mech": "SS", "verified": false,
+                      "comment": "ML 5.3 (IGP) / Mw ~5.0 (USGS)"},
+    "extreme_son_la": {"name": "Extreme scenario near TP. Sơn La", "lat": 21.33, "lon": 103.93, "depth_km": 12, "mag": 7.0, "mech": "SS", "verified": false,
+                       "comment": "Illustrative extreme event on the Sơn La fault; not a catalogue event"},
+    "extreme_lai_chau": {"name": "Extreme scenario near TP. Lai Châu", "lat": 22.40, "lon": 103.45, "depth_km": 12, "mag": 7.0, "mech": "SS", "verified": false,
+                         "comment": "Illustrative extreme event on the Lai Châu-Điện Biên fault; not a catalogue event"}
+  }
+}
