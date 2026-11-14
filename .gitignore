@@ -3,5 +3,6 @@
 **/__pycache__/
 *.py[cod]
 /511/outputs/
+/512/outputs/
 /vasteq/deployment/.secrets/
 /vasteq/deployment/.env

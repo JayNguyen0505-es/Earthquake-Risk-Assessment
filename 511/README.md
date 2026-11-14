@@ -88,3 +88,41 @@ These findings verify decoding and identify timing issues; they do not establish
 event labels, calibration, clipping status, or readiness for model training.
 
 ObsPy API reference: https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
+
+## Picking, association and location (added, runs without local labels)
+
+```
+MiniSEED ──► pick.py (SeisBench PhaseNet / EQTransformer, PyTorch) ──► picks.csv
+         ──► locate_events.py = loc/associate.py (REAL-style) + loc/locate.py (grid + Nelder-Mead,
+             1-D layered travel times in loc/velocity.py) ──► catalog.csv
+```
+
+```bash
+pip install -r 511/requirements.txt            # adds pandas, scipy, seisbench (+ torch)
+python -m unittest discover -s 511/tests -v    # synthetic tests: velocity model, locator, associator
+
+# data-free evaluation on the real station geometry (synthetic events, noisy picks, false picks)
+python 511/synthetic_demo.py --stations data/stations.xlsx --events 10 --false-picks 60 --out 511/outputs/synthetic_demo
+python 511/synthetic_demo.py --stations data/stations.xlsx --wrong-model      # effect of an unknown velocity model
+
+# real sample day: pick with pretrained weights, then associate + locate
+python 511/pick.py --data-dir data/samples/4.0 --model phasenet --weights stead --plot --out 511/outputs/picks/picks_stead.csv
+python 511/pick.py --data-dir data/samples/4.0 --model eqtransformer --weights instance --out 511/outputs/picks/picks_eqt.csv
+python 511/locate_events.py --picks 511/outputs/picks/picks_stead.csv --stations data/stations.xlsx --out 511/outputs/catalog/catalog.csv
+
+# picker benchmark on an open labelled dataset (downloads via SeisBench)
+python 511/evaluate_picker.py --dataset ETHZ --model phasenet --weights ethz --n 500
+```
+
+Why SeisBench instead of `511/phase1` (TensorFlow-1 PhaseNet): same PhaseNet architecture, PyTorch
+(matches the repository guideline numpy/scikit/pytorch), several pretrained weights, EQTransformer
+for comparison, and a standard benchmark harness. `phase1/` is kept as the reference implementation.
+
+What the synthetic demo already shows for this network: events inside the network are located to
+~1 km with the right velocity model; events outside (azimuthal gap > 250°) with no S picks are off
+by 10-25 km; a wrong velocity model leaves epicentres within a few km but biases depths by
+10-20 km. Hence the two data items that matter most for 5.1.1 are the regional 1-D velocity model
+(checklist B5 → `511/config/velocity_nw_vietnam.csv`, currently a generic placeholder) and analyst
+P/S picks (B4) to fine-tune the picker, especially for S on accelerometer records.
+
+Outputs under `511/outputs/` are git-ignored.
