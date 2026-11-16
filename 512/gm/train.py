@@ -24,10 +24,21 @@ from .flatfile import TARGETS, load
 from .models import MODEL_NAMES, make_model
 
 
-def run(flatfile, out, targets, models, distance="rhypo", n_splits=5, seed=0, plots=True):
+def run(flatfile, out, targets, models, distance="rhypo", n_splits=5, seed=0, plots=True,
+        max_dist=None, min_mag=None, require_vs30=False):
     out = Path(out)
     (out / "models").mkdir(parents=True, exist_ok=True)
     df = load(flatfile)
+    n0 = len(df)
+    if max_dist:
+        df = df[df["rhypo_km"] <= max_dist]
+    if min_mag:
+        df = df[df["mag"] >= min_mag]
+    if require_vs30:
+        df = df[df["vs30_ms"].notna()]
+    df = df.reset_index(drop=True)
+    if len(df) != n0:
+        print(f"filters kept {len(df)}/{n0} recordings, {df['event_id'].nunique()} events")
     rows, residuals = [], []
     for target in targets:
         col = TARGETS[target]
@@ -98,9 +109,13 @@ def main(argv=None):
     p.add_argument("--models", nargs="+", default=MODEL_NAMES, choices=MODEL_NAMES)
     p.add_argument("--distance", default="rhypo", choices=["rhypo", "rjb", "rrup"])
     p.add_argument("--splits", type=int, default=5)
+    p.add_argument("--max-dist", type=float, help="drop recordings beyond this hypocentral distance (km)")
+    p.add_argument("--min-mag", type=float)
+    p.add_argument("--require-vs30", action="store_true", help="drop rows without Vs30 instead of assuming 760 m/s")
     p.add_argument("--no-plots", action="store_true")
     a = p.parse_args(argv)
-    table = run(a.flatfile, a.out, a.targets, a.models, a.distance, a.splits, plots=not a.no_plots)
+    table = run(a.flatfile, a.out, a.targets, a.models, a.distance, a.splits, plots=not a.no_plots,
+                max_dist=a.max_dist, min_mag=a.min_mag, require_vs30=a.require_vs30)
     cols = ["target", "model", "cv_rmse", "cv_r2", "cv_tau", "cv_phi", "cv_sigma"]
     print(table[cols].to_string(index=False))
 
