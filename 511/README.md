@@ -126,3 +126,53 @@ by 10-25 km; a wrong velocity model leaves epicentres within a few km but biases
 P/S picks (B4) to fine-tune the picker, especially for S on accelerometer records.
 
 Outputs under `511/outputs/` are git-ignored.
+
+## Open-data programme: Parts A, B, C (no Vietnamese recordings needed)
+
+Until the network has recorded and the Institute has labelled earthquakes, 5.1.1 is developed and
+measured on open international data. Three parts, each with a classic baseline:
+
+| Part | Question | Data | Scripts | Baseline |
+|---|---|---|---|---|
+| A. Phase picking | How well do pretrained pickers find P/S, and how much do they lose on another region or on accelerometers? | SeisBench benchmarks: ETHZ, STEAD, INSTANCE, AQ2009 (L'Aquila), PNW accelerometers | `evaluate_picker.py`, `finetune_picker.py` | STA/LTA (`--model stalta`) |
+| B. End-to-end network | Thinned to 20 stations like NW Vietnam, how many catalogued events does the chain detect, how well located, which magnitude? | FDSN: INGV (Central Italy 2016) and SCEDC (Ridgecrest 2019), agency catalogue + analyst arrivals as reference | `e2e_fetch.py`, `e2e_run.py`, `e2e_selftest.py` | STA/LTA picker; Wood-Anderson ML |
+| C. Magnitude | Can a network estimate M from a few seconds after P better than a Richter formula? | AQ2009GM / InstanceGM (ground-motion units), optionally HN only | `train_magnitude.py` | data-driven M = a·log A + b·log R + c |
+
+```
+Part B chain (e2e_run.py):
+  hourly MiniSEED ─► picker (PhaseNet / EQTransformer / STA-LTA, dl/pickers.py)
+                  ─► windowed REAL-style association (loc/associate.py; P+S node scoring, S-shadow removal)
+                  ─► location (loc/locate.py; region 1-D model, station elevation correction)
+                  ─► ML (e2e/magnitude.py; IASPEI Wood-Anderson) + DL magnitude (dl/magnet.py)
+                  ─► matching with the agency catalogue (e2e/evaluate.py): recall by magnitude,
+                     precision, epicentre/depth/origin-time/magnitude errors, pick recall vs analysts
+```
+
+Quick start (any machine; on the DGX see [docs/DGX.md](../docs/DGX.md)):
+
+```bash
+python -m unittest discover -s 511/tests -v     # 28 tests incl. synthetic datasets and a fake FDSN service
+python 511/e2e_selftest.py                      # full Part B chain offline: expect recall 1.0, ~0 km error
+
+python 511/evaluate_picker.py --dataset ETHZ --model stalta --n 2000
+python 511/evaluate_picker.py --dataset ETHZ --model phasenet --weights instance --n 2000 --device cuda
+
+python 511/e2e_fetch.py --region central_italy             # 20 stations, 2 days, INGV
+python 511/e2e_fetch.py --region central_italy --bands HN --tag hn   # accelerometers only
+python 511/e2e_fetch.py --region ridgecrest                # 20 stations, 2 days, SCEDC
+python 511/e2e_run.py --run data/e2e/central_italy --picker phasenet --weights instance --device cuda
+python 511/e2e_run.py --run data/e2e/central_italy --picker stalta
+
+python 511/train_magnitude.py --dataset AQ2009GM --epochs 40 --device cuda --out 511/outputs/magnitude/aq2009
+python 511/e2e_run.py --run data/e2e/central_italy --picker phasenet --weights instance --device cuda \
+    --magnitude-model 511/outputs/magnitude/aq2009/model.pt
+
+python 511/finetune_picker.py --dataset AQ2009GM --channels HN --weights instance --device cuda \
+    --out 511/outputs/finetune/aq2009_hn
+```
+
+Regions (bounding box, provider, time window, 1-D velocity model, ML coefficients) are in
+`config/regions.json`; `nw_vietnam` is already defined so the same chain runs on the 20 Vietnamese
+stations once their data are laid out like a run directory (see `e2e/fetch.py`). Any SeisBench-format
+folder (metadata.csv + waveforms.hdf5) is accepted wherever a dataset name is, which is how labelled
+Vietnamese traces will enter Parts A and C.
