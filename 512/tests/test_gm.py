@@ -93,6 +93,22 @@ class ShakeMapParserTests(unittest.TestCase):
         self.assertEqual(r["station_id"], "NC.J051")
 
 
+    def test_parse_shakemap35_names(self):
+        geojson = {"features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.5, 35.7]},
+                                 "properties": {"network": "CI", "code": "CLC", "pga": 20.0, "pgv": 15.0, "distance": 12.0,
+                                                "channels": [{"name": "HNE", "amplitudes": [
+                                                    {"name": "pga", "value": 20.0, "units": "%g", "flag": "0"},
+                                                    {"name": "psa03", "value": 40.0, "units": "%g", "flag": "0"},
+                                                    {"name": "psa10", "value": 10.0, "units": "%g", "flag": "0"},
+                                                    {"name": "psa30", "value": 2.0, "units": "%g", "flag": "0"}]}]}}]}
+        df = parse_stationlist(geojson, {"id": "ci1", "mag": 6.4, "depth_km": 10.0, "lat": 35.7, "lon": -117.5})
+        r = df.iloc[0]
+        self.assertAlmostEqual(r["sa_0.3_g"], 0.40)
+        self.assertAlmostEqual(r["sa_1.0_g"], 0.10)
+        self.assertAlmostEqual(r["sa_3.0_g"], 0.02)
+        self.assertTrue(np.isnan(r["vs30_ms"]))
+
+
 class ModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

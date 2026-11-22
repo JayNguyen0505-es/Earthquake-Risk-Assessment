@@ -27,7 +27,13 @@ import pandas as pd
 from .flatfile import COLUMNS, clean, haversine_km, save
 
 COMCAT = "https://earthquake.usgs.gov/fdsnws/event/1/query"
-IM_NAMES = {"pga": "pga_g", "pgv": "pgv_cms", "sa(0.3)": "sa_0.3_g", "sa(1.0)": "sa_1.0_g", "sa(3.0)": "sa_3.0_g"}
+# ShakeMap 4 names (sa(0.3)) and ShakeMap 3.5 names (psa03), which older events still carry
+IM_NAMES = {
+    "pga": "pga_g", "pgv": "pgv_cms",
+    "sa(0.3)": "sa_0.3_g", "sa(1.0)": "sa_1.0_g", "sa(3.0)": "sa_3.0_g",
+    "psa03": "sa_0.3_g", "psa10": "sa_1.0_g", "psa30": "sa_3.0_g",
+    "psa(0.3)": "sa_0.3_g", "psa(1.0)": "sa_1.0_g", "psa(3.0)": "sa_3.0_g",
+}
 
 
 def _num(v):
@@ -134,7 +140,18 @@ def query_events(session, start, end, minmag, bbox=None, limit=20000):
     return resp.json()["features"]
 
 
-def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None):
+def fill_vs30(df, grid):
+    """ShakeMap 3.5 station lists have no vs30: fill the gaps from the USGS grid (the one ShakeMap uses)."""
+    from .vs30 import sample_points
+
+    missing = df["vs30_ms"].isna()
+    if missing.any():
+        df.loc[missing, "vs30_ms"] = sample_points(grid, df.loc[missing, "st_lat"], df.loc[missing, "st_lon"])
+        print(f"filled Vs30 for {int(missing.sum())} recordings from {grid}")
+    return df
+
+
+def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None, vs30_grid=None):
     import requests
 
     cache = Path(cache)
@@ -177,6 +194,12 @@ def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None)
     if not frames:
         raise SystemExit("no recordings collected")
     flat = clean(pd.concat(frames, ignore_index=True))
+    if vs30_grid:
+        flat = fill_vs30(flat, vs30_grid)
+    else:
+        n = int(flat["vs30_ms"].isna().sum())
+        if n:
+            print(f"warning: {n} recordings have no Vs30; pass --vs30-grid data/gm/vs30/global_vs30.grd")
     save(flat, out)
     print(f"wrote {len(flat)} recordings from {flat['event_id'].nunique()} events to {out}")
     return flat
@@ -191,8 +214,9 @@ def main(argv=None):
     p.add_argument("--out", default="data/gm/shakemap_flatfile.csv")
     p.add_argument("--cache", default="data/gm/shakemap_cache")
     p.add_argument("--max-events", type=int)
+    p.add_argument("--vs30-grid", help="USGS global_vs30.grd: fill Vs30 for stations lacking it (ShakeMap 3.5 events)")
     a = p.parse_args(argv)
-    fetch(a.start, a.end, a.minmag, a.out, a.cache, a.bbox, max_events=a.max_events)
+    fetch(a.start, a.end, a.minmag, a.out, a.cache, a.bbox, max_events=a.max_events, vs30_grid=a.vs30_grid)
 
 
 if __name__ == "__main__":
