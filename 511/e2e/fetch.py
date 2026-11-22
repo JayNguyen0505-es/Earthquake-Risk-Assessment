@@ -71,8 +71,40 @@ def catalog_to_frames(cat, provider=""):
     return events.sort_values("time_s").reset_index(drop=True), arrivals
 
 
-def fetch_catalog(clients, region, start, end, minmag, out_dir, day_chunks=True):
-    """Query the first provider that returns events, day by day, with arrivals when supported."""
+def _event_arrivals(name, client, cat, max_events=3000, max_failures=10):
+    """Re-query each event by id with includearrivals=True (INGV only serves arrivals per event)."""
+    if len(cat) > max_events:
+        print(f"  [{name}] {len(cat)} events > {max_events}: skipping per-event arrival queries")
+        return cat
+    from obspy import Catalog
+
+    out, failures, n_arr = Catalog(), 0, 0
+    for k, ev in enumerate(cat):
+        try:
+            full = client.get_events(eventid=_event_id(ev), includearrivals=True)
+            ev = full.events[0]
+            failures = 0
+            org = ev.preferred_origin() or (ev.origins[0] if ev.origins else None)
+            n_arr += len(org.arrivals) if org is not None else 0
+        except Exception as exc:
+            failures += 1
+            if failures == 1 or failures == max_failures:
+                print(f"  [{name}] per-event arrivals failed for {_event_id(ev)}: {type(exc).__name__}: {str(exc)[:160]}")
+            if failures >= max_failures:
+                print(f"  [{name}] {max_failures} consecutive failures: keeping the remaining events without arrivals")
+                out.events.extend(cat.events[k:])
+                return out
+        out.events.append(ev)
+        if (k + 1) % 100 == 0:
+            print(f"  [{name}] arrivals for {k + 1}/{len(cat)} events ({n_arr} arrivals)")
+    return out
+
+
+def fetch_catalog(clients, region, start, end, minmag, out_dir, day_chunks=True, per_event_arrivals=True):
+    """Query the first provider that returns events, day by day, with analyst arrivals.
+
+    Services that reject ``includearrivals`` on a search (INGV) are queried again event by event.
+    """
     from obspy import Catalog, UTCDateTime
     from obspy.clients.fdsn.header import FDSNNoDataException
 
@@ -83,9 +115,9 @@ def fetch_catalog(clients, region, start, end, minmag, out_dir, day_chunks=True)
         nxt = min(t + 86400, t_end) if day_chunks else t_end
         edges.append((t, nxt))
         t = nxt
-    used, cat = None, Catalog()
+    used, cat, rejected = None, Catalog(), False
     for name, client in clients:
-        cat = Catalog()
+        cat, rejected = Catalog(), False
         for t1, t2 in edges:
             kw = dict(starttime=t1, endtime=t2, minlatitude=minlat, maxlatitude=maxlat, minlongitude=minlon,
                       maxlongitude=maxlon, minmagnitude=minmag, orderby="time-asc")
@@ -93,8 +125,9 @@ def fetch_catalog(clients, region, start, end, minmag, out_dir, day_chunks=True)
                 part = client.get_events(includearrivals=True, **kw)
             except FDSNNoDataException:
                 continue
-            except Exception as exc:  # some services reject includearrivals; retry without
-                print(f"  [{name}] get_events with arrivals failed ({type(exc).__name__}); retrying without")
+            except Exception as exc:  # some services reject includearrivals on searches; retry without
+                print(f"  [{name}] get_events with arrivals rejected ({type(exc).__name__}); retrying without")
+                rejected = True
                 try:
                     part = client.get_events(**kw)
                 except FDSNNoDataException:
@@ -102,6 +135,8 @@ def fetch_catalog(clients, region, start, end, minmag, out_dir, day_chunks=True)
             cat.extend(part.events)
         if len(cat):
             used = name
+            if rejected and per_event_arrivals:
+                cat = _event_arrivals(name, client, cat)
             break
     events, arrivals = catalog_to_frames(cat, used or "")
     out_dir = Path(out_dir)
@@ -198,12 +233,26 @@ def hour_key(t):
     return t.strftime("%Y%m%dT%H")
 
 
-def fetch_waveforms(client, stations, start, end, out_dir, chunk_s=3600, retries=3, sleep=1.0):
+def _loc(code):
+    return code if code else "--"  # FDSN request syntax for an empty location code
+
+
+def fetch_waveforms(clients, stations, start, end, out_dir, chunk_s=3600, retries=3, sleep=1.0, retry_missing=False):
+    """Hourly MiniSEED per station. ``clients`` = [(name, client), ...] tried in order.
+
+    The first provider is asked with one bulk request per hour; stations it does not return are
+    asked one by one, from every provider in turn, before being marked ``.nodata``.
+    """
     from obspy import Stream, UTCDateTime
 
+    if not isinstance(clients, (list, tuple)):
+        clients = [("provider", clients)]
     out_dir = Path(out_dir) / "waveforms"
+    if retry_missing and out_dir.exists():
+        n = sum(1 for f in out_dir.glob("*/*.nodata") if f.unlink() is None)
+        print(f"  removed {n} .nodata markers")
     t, t_end = UTCDateTime(start), UTCDateTime(end)
-    n_files, n_empty = 0, 0
+    n_files, n_empty, errors = 0, 0, {}
     while t < t_end:
         t2 = min(t + chunk_s, t_end)
         folder = out_dir / hour_key(t)
@@ -211,25 +260,32 @@ def fetch_waveforms(client, stations, start, end, out_dir, chunk_s=3600, retries
         todo = [r for _, r in stations.iterrows()
                 if not (folder / f"{r['station']}.mseed").exists() and not (folder / f"{r['station']}.nodata").exists()]
         if todo:
-            bulk = [(r["network"], r["code"], r["location"] or "", f"{r['band']}?", t, t2) for r in todo]
-            st = None
+            name0, client0 = clients[0]
+            bulk = [(r["network"], r["code"], _loc(r["location"]), f"{r['band']}?", t, t2) for r in todo]
+            st = Stream()
             for attempt in range(retries):
                 try:
-                    st = client.get_waveforms_bulk(bulk)
+                    st = client0.get_waveforms_bulk(bulk)
                     break
                 except Exception as exc:
+                    key = f"{name0} bulk {type(exc).__name__}: {str(exc)[:200]}"
+                    errors[key] = errors.get(key, 0) + 1
                     if "No data" in str(exc) or type(exc).__name__ == "FDSNNoDataException":
-                        st = Stream()
                         break
-                    print(f"  {hour_key(t)} bulk request failed ({type(exc).__name__}: {exc}); retry {attempt + 1}")
                     time.sleep(sleep * (attempt + 1) * 5)
-            if st is None:  # fall back to one request per station
-                st = Stream()
-                for r in todo:
+            missing = [r for r in todo if not len(st.select(network=r["network"], station=r["code"]))]
+            for name, client in clients:
+                still = []
+                for r in missing:
                     try:
-                        st += client.get_waveforms(r["network"], r["code"], r["location"] or "", f"{r['band']}?", t, t2)
-                    except Exception:
-                        pass
+                        st += client.get_waveforms(r["network"], r["code"], _loc(r["location"]), f"{r['band']}?", t, t2)
+                    except Exception as exc:
+                        key = f"{name} single {type(exc).__name__}: {str(exc)[:200]}"
+                        errors[key] = errors.get(key, 0) + 1
+                        still.append(r)
+                missing = still
+                if not missing:
+                    break
             for r in todo:
                 sub = st.select(network=r["network"], station=r["code"])
                 if len(sub):
@@ -241,11 +297,13 @@ def fetch_waveforms(client, stations, start, end, out_dir, chunk_s=3600, retries
             time.sleep(sleep)
         print(f"  {hour_key(t)}: {len(todo)} requested, {sum(1 for _ in folder.glob('*.mseed'))} stations with data")
         t = t2
+    for key, n in sorted(errors.items(), key=lambda kv: -kv[1])[:5]:
+        print(f"  request errors x{n}: {key}")
     return n_files, n_empty
 
 
 def run_fetch(region, start, end, out_dir, n_stations=None, bands=None, provider=None, catalog_minmag=None,
-              clients=None, skip_waveforms=False, min_spacing_km=0.0):
+              clients=None, skip_waveforms=False, min_spacing_km=0.0, only="all", retry_missing=False):
     """Full download for one region; ``clients`` = {name: client} injects test doubles."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -260,23 +318,35 @@ def run_fetch(region, start, end, out_dir, n_stations=None, bands=None, provider
         return clients[name]
 
     print(f"[{region['id']}] {start} -> {end}, provider {provider}, bands {bands}, {n_stations} stations")
-    inv = fetch_inventory(client(provider), region, start, end, bands)
-    cands = candidate_stations(inv, bands, start, end)
-    if cands.empty:
-        raise SystemExit("no station with 3 components in the requested bands")
-    stations = select_stations(cands, n_stations, region["bbox"], min_spacing_km)
-    stations.to_csv(out_dir / "stations.csv", index=False)
-    subset_inventory(inv, stations).write(str(out_dir / "inventory.xml"), format="STATIONXML")
-    print(f"  {len(cands)} candidate stations -> {len(stations)} selected; bands used: "
-          f"{stations['band'].value_counts().to_dict()}")
-    cat_clients = [(name, client(name)) for name in region.get("catalog_providers", [provider])]
-    fetch_catalog(cat_clients, region, start, end,
-                  region.get("catalog_minmag", 0.5) if catalog_minmag is None else catalog_minmag, out_dir)
+    if only in ("catalog", "waveforms") and (out_dir / "stations.csv").exists():
+        stations = pd.read_csv(out_dir / "stations.csv", dtype={"location": str}).fillna({"location": ""})
+        print(f"  reusing {len(stations)} stations from {out_dir / 'stations.csv'}")
+    else:
+        inv = fetch_inventory(client(provider), region, start, end, bands)
+        cands = candidate_stations(inv, bands, start, end)
+        if cands.empty:
+            raise SystemExit("no station with 3 components in the requested bands")
+        stations = select_stations(cands, n_stations, region["bbox"], min_spacing_km)
+        stations.to_csv(out_dir / "stations.csv", index=False)
+        subset_inventory(inv, stations).write(str(out_dir / "inventory.xml"), format="STATIONXML")
+        print(f"  {len(cands)} candidate stations -> {len(stations)} selected; bands used: "
+              f"{stations['band'].value_counts().to_dict()}")
+    if only in ("all", "catalog"):
+        cat_clients = [(name, client(name)) for name in region.get("catalog_providers", [provider])]
+        fetch_catalog(cat_clients, region, start, end,
+                      region.get("catalog_minmag", 0.5) if catalog_minmag is None else catalog_minmag, out_dir)
     meta = {"region": region["id"], "region_name": region.get("name", ""), "start": str(start), "end": str(end),
             "provider": provider, "bands": bands, "n_stations": int(len(stations)), "bbox": region["bbox"],
             "network_centre": network_centre(stations)}
     (out_dir / "run.json").write_text(json.dumps(meta, indent=2))
-    if not skip_waveforms:
-        n_files, n_empty = fetch_waveforms(client(provider), stations, start, end, out_dir)
+    if not skip_waveforms and only in ("all", "waveforms"):
+        names = [provider] + [p for p in region.get("waveform_providers", []) if p != provider]
+        wf_clients = []
+        for name in names:
+            try:
+                wf_clients.append((name, client(name)))
+            except Exception as exc:
+                print(f"  provider {name} unavailable: {exc}")
+        n_files, n_empty = fetch_waveforms(wf_clients, stations, start, end, out_dir, retry_missing=retry_missing)
         print(f"  waveforms: {n_files} station-hours written, {n_empty} without data")
     return out_dir

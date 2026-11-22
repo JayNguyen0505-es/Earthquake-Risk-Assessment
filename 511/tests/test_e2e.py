@@ -96,6 +96,27 @@ class EvaluateTests(unittest.TestCase):
         self.assertAlmostEqual(m["P"]["resid_mean"], 0.1, places=6)
 
 
+class FetchFallbackTests(unittest.TestCase):
+    def test_per_event_arrivals_and_per_station_waveforms(self):
+        from e2e.fake_fdsn import FakeFDSN
+        from e2e.fetch import run_fetch
+
+        region = get_region("central_italy")
+        vm = velocity_model(region)
+        fake = FakeFDSN(region, vm, "2020-01-01T00:00:00", "2020-01-01T01:00:00", n_events=4, seed=3,
+                        reject_search_arrivals=True, bulk_nodata=True)
+        with tempfile.TemporaryDirectory() as d:
+            run_fetch(region, "2020-01-01T00:00:00", "2020-01-01T01:00:00", d, n_stations=6, bands=["HH"],
+                      clients={"INGV": fake})
+            arr = pd.read_csv(Path(d) / "arrivals.csv")
+            self.assertEqual(arr["event_id"].nunique(), 4)                  # arrivals recovered per event
+            self.assertEqual(len(list(Path(d).glob("waveforms/*/*.mseed"))), 6)  # per-station fallback
+            # waveforms-only re-run keeps the station selection and finds nothing left to do
+            run_fetch(region, "2020-01-01T00:00:00", "2020-01-01T01:00:00", d, clients={"INGV": fake},
+                      only="waveforms", retry_missing=True)
+            self.assertEqual(len(pd.read_csv(Path(d) / "stations.csv")), 6)
+
+
 class EndToEndTests(unittest.TestCase):
     def test_fake_network_full_chain(self):
         import e2e_selftest

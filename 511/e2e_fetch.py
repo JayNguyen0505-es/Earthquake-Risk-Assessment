@@ -34,6 +34,9 @@ def main(argv=None):
     p.add_argument("--min-spacing-km", type=float, default=0.0)
     p.add_argument("--catalog-minmag", type=float)
     p.add_argument("--skip-waveforms", action="store_true", help="catalogue and stations only (quick check)")
+    p.add_argument("--only", default="all", choices=["all", "catalog", "waveforms"],
+                   help="redo only the catalogue (+ analyst arrivals) or only the waveforms of an existing run folder")
+    p.add_argument("--retry-missing", action="store_true", help="forget .nodata markers and request those hours again")
     p.add_argument("--tag", default="", help="suffix for the output folder")
     p.add_argument("--out", help="output folder (default data/e2e/<region>[_<tag>])")
     a = p.parse_args(argv)
@@ -41,7 +44,7 @@ def main(argv=None):
     out = Path(a.out) if a.out else ROOT / "data" / "e2e" / (a.region + (f"_{a.tag}" if a.tag else ""))
     run_fetch(region, a.start or region["start"], a.end or region["end"], out, n_stations=a.stations,
               bands=a.bands, catalog_minmag=a.catalog_minmag, skip_waveforms=a.skip_waveforms,
-              min_spacing_km=a.min_spacing_km)
+              min_spacing_km=a.min_spacing_km, only=a.only, retry_missing=a.retry_missing)
     print(f"done: {out}")
 
 

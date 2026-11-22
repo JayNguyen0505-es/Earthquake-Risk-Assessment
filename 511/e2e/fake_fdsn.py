@@ -18,10 +18,12 @@ from loc.velocity import TravelTimeTable
 
 class FakeFDSN:
     def __init__(self, region, vmodel, start, end, n_stations=14, n_events=8, seed=0, fs=100.0, gain=1e9,
-                 noise=2e-8, mag_range=(1.8, 3.5), f_s=4.0):
+                 noise=2e-8, mag_range=(1.8, 3.5), f_s=4.0, reject_search_arrivals=False, bulk_nodata=False):
         from obspy import UTCDateTime
 
         self.rng = np.random.default_rng(seed)
+        self.reject_search_arrivals = reject_search_arrivals  # INGV: arrivals only for eventid queries
+        self.bulk_nodata = bulk_nodata                        # a service whose bulk endpoint returns nothing
         self.region, self.fs, self.gain, self.noise, self.f_s = region, fs, gain, noise, f_s
         self.start, self.end = UTCDateTime(start), UTCDateTime(end)
         minlon, minlat, maxlon, maxlat = region["bbox"]
@@ -66,13 +68,17 @@ class FakeFDSN:
                                 channels=chans, creation_date=self.start - 86400 * 365))
         return Inventory(networks=[Network(code="XX", stations=stas)], source="FakeFDSN")
 
-    def get_events(self, starttime=None, endtime=None, includearrivals=False, **kwargs):
+    def get_events(self, starttime=None, endtime=None, includearrivals=False, eventid=None, **kwargs):
         from obspy.core.event import (Arrival, Catalog, Event, Magnitude, Origin, Pick, ResourceIdentifier,
                                       WaveformStreamID)
-        from obspy.clients.fdsn.header import FDSNNoDataException
+        from obspy.clients.fdsn.header import FDSNBadRequestException, FDSNNoDataException
 
+        if includearrivals and eventid is None and self.reject_search_arrivals:
+            raise FDSNBadRequestException("Bad request: includearrivals only supported with eventid")
         evs = []
         for ev in self.events:
+            if eventid is not None and ev["id"] != eventid:
+                continue
             if (starttime and ev["t"] < starttime) or (endtime and ev["t"] >= endtime):
                 continue
             o = Origin(time=ev["t"], latitude=ev["lat"], longitude=ev["lon"], depth=ev["depth"] * 1000,
@@ -128,6 +134,12 @@ class FakeFDSN:
 
     def get_waveforms_bulk(self, bulk, **kwargs):
         from obspy import Stream
+        from obspy.clients.fdsn.header import FDSNNoDataException
+
+        if self.bulk_nodata:
+            raise FDSNNoDataException("No data available for request")
+        for _, _, loc, _, _, _ in bulk:
+            assert loc != "", "empty location codes must be sent as '--'"
 
         st = Stream()
         for net, sta, loc, cha, t1, t2 in bulk:
