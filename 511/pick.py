@@ -20,42 +20,22 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from dl.pickers import MODEL_NAMES, load_picker  # noqa: E402
+from dl.pickers import pick_stream as _pick_stream  # noqa: E402
 
 
 def load_model(name, weights, device="cpu"):
-    import seisbench.models as sbm
-
-    cls = {"phasenet": sbm.PhaseNet, "eqtransformer": sbm.EQTransformer, "gpd": sbm.GPD}[name]
-    if weights == "untrained":  # pipeline test without network access
-        model = cls()
-    else:
-        model = cls.from_pretrained(weights)
-    model.to(device)
-    model.eval()
-    return model
+    return load_picker(name, weights, device)
 
 
-def pick_stream(model, stream, p_threshold=0.3, s_threshold=0.3, batch_size=256):
-    kwargs = {"batch_size": batch_size}
-    # thresholds are keyword arguments of classify for the picking models
-    kwargs.update({"P_threshold": p_threshold, "S_threshold": s_threshold})
-    try:
-        out = model.classify(stream, **kwargs)
-    except TypeError:
-        out = model.classify(stream, batch_size=batch_size)
-    rows = []
-    for p in out.picks:
-        net, sta = (p.trace_id.split(".") + ["", ""])[:2]
-        rows.append({
-            "station": sta, "network": net, "phase": p.phase,
-            "time": str(p.peak_time), "time_s": float(p.peak_time.timestamp),
-            "prob": float(p.peak_value) if p.peak_value is not None else float("nan"),
-            "start": str(p.start_time), "end": str(p.end_time), "trace_id": p.trace_id,
-        })
-    return rows
+def pick_stream(model, stream, p_threshold=0.3, s_threshold=0.3, batch_size=256, station_key="sta"):
+    return _pick_stream(model, stream, p_threshold, s_threshold, batch_size, station_key)
 
 
 def run(data_dir, out, model_name="phasenet", weights="stead", p_threshold=0.3, s_threshold=0.3,
@@ -79,7 +59,7 @@ def run(data_dir, out, model_name="phasenet", weights="stead", p_threshold=0.3, 
             r.update({"file": path.name, "model": model_name, "weights": weights})
             rows.append(r)
         print(f"{path.name}: {sum(1 for r in rows if r['file'] == path.name)} picks")
-        if plot and rows:
+        if plot and rows and hasattr(model, "annotate"):
             _plot(model, st, [r for r in rows if r["file"] == path.name], out.parent / f"{path.stem}.png")
     fields = ["station", "network", "phase", "time", "time_s", "prob", "start", "end", "trace_id", "file", "model", "weights"]
     with open(out, "w", newline="") as fh:
@@ -118,9 +98,9 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", default=str(ROOT / "data" / "samples" / "4.0"))
     p.add_argument("--out", default=str(ROOT / "511" / "outputs" / "picks" / "picks.csv"))
-    p.add_argument("--model", default="phasenet", choices=["phasenet", "eqtransformer", "gpd"])
+    p.add_argument("--model", default="phasenet", choices=MODEL_NAMES)
     p.add_argument("--weights", default="stead", help="pretrained weights name, e.g. stead, instance, original, geofon; "
-                                                       "'untrained' = random weights for a pipeline test")
+                                                       "a path saved by finetune_picker.py; 'untrained' = random weights for a pipeline test")
     p.add_argument("--p-threshold", type=float, default=0.3)
     p.add_argument("--s-threshold", type=float, default=0.3)
     p.add_argument("--device", default="cpu")
