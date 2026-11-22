@@ -49,13 +49,18 @@ def _unflagged(flag):
     return flag in (None, "", "0", 0)
 
 
-def parse_stationlist(geojson, event):
+def _is_vertical(channel_name):
+    return str(channel_name).strip().upper().endswith("Z")
+
+
+def parse_stationlist(geojson, event, components="horizontal"):
     """Convert one stationlist.json into unified rows.
 
     ``event`` is a dict with id, mag, depth_km, lat, lon. Only ``station_type == "seismic"``
     features are kept (DYFI/macroseismic points are not instrumental recordings). Amplitudes are
-    the maximum over channels (horizontal components dominate); ShakeMap reports accelerations in
-    %g and velocity in cm/s.
+    the larger horizontal component (``components="horizontal"``, the GMPE convention) or the
+    maximum over every channel including the vertical (``"all"``); ShakeMap reports accelerations
+    in %g and velocity in cm/s.
     """
     rows = []
     for feat in geojson.get("features", []):
@@ -67,6 +72,8 @@ def parse_stationlist(geojson, event):
         lon, lat = feat["geometry"]["coordinates"][:2]
         ims = {v: np.nan for v in IM_NAMES.values()}
         for ch in props.get("channels", []) or []:
+            if components == "horizontal" and _is_vertical(ch.get("name", "")):
+                continue
             for amp in ch.get("amplitudes", []) or []:
                 name = str(amp.get("name", "")).lower()
                 col = IM_NAMES.get(name)
@@ -151,7 +158,8 @@ def fill_vs30(df, grid):
     return df
 
 
-def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None, vs30_grid=None):
+def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None, vs30_grid=None,
+          components="horizontal"):
     import requests
 
     cache = Path(cache)
@@ -186,7 +194,7 @@ def fetch(start, end, minmag, out, cache, bbox=None, sleep=0.5, max_events=None,
         except Exception as exc:  # keep going; the run is resumable
             print(f"  {eid}: skipped ({type(exc).__name__}: {exc})")
             continue
-        df = parse_stationlist(station_json, event)
+        df = parse_stationlist(station_json, event, components)
         if len(df):
             frames.append(df)
         if (i + 1) % 50 == 0:
@@ -215,8 +223,11 @@ def main(argv=None):
     p.add_argument("--cache", default="data/gm/shakemap_cache")
     p.add_argument("--max-events", type=int)
     p.add_argument("--vs30-grid", help="USGS global_vs30.grd: fill Vs30 for stations lacking it (ShakeMap 3.5 events)")
+    p.add_argument("--components", default="horizontal", choices=["horizontal", "all"],
+                   help="larger horizontal component (GMPE convention, default) or max over all channels")
     a = p.parse_args(argv)
-    fetch(a.start, a.end, a.minmag, a.out, a.cache, a.bbox, max_events=a.max_events, vs30_grid=a.vs30_grid)
+    fetch(a.start, a.end, a.minmag, a.out, a.cache, a.bbox, max_events=a.max_events, vs30_grid=a.vs30_grid,
+          components=a.components)
 
 
 if __name__ == "__main__":

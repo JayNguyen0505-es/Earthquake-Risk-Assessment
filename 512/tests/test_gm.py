@@ -109,6 +109,17 @@ class ShakeMapParserTests(unittest.TestCase):
         self.assertTrue(np.isnan(r["vs30_ms"]))
 
 
+    def test_vertical_channel_excluded_by_default(self):
+        feat = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [-117.5, 35.7]},
+                "properties": {"network": "CI", "code": "ABC", "distance": 20.0, "channels": [
+                    {"name": "HNZ", "amplitudes": [{"name": "pga", "value": 50.0, "units": "%g", "flag": "0"}]},
+                    {"name": "HNE", "amplitudes": [{"name": "pga", "value": 20.0, "units": "%g", "flag": "0"}]},
+                    {"name": "HNN", "amplitudes": [{"name": "pga", "value": 30.0, "units": "%g", "flag": "0"}]}]}}
+        ev = {"id": "e", "mag": 5.0, "depth_km": 8.0, "lat": 35.7, "lon": -117.5}
+        self.assertAlmostEqual(parse_stationlist({"features": [feat]}, ev).iloc[0]["pga_g"], 0.30)
+        self.assertAlmostEqual(parse_stationlist({"features": [feat]}, ev, components="all").iloc[0]["pga_g"], 0.50)
+
+
 class ModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -184,6 +195,23 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(list(st.columns[:0]), [])
         self.assertAlmostEqual(st.loc[0, "lat"], 21.2)
         self.assertEqual(st.loc[0, "station"], 4001)
+
+
+class TrainFilterTests(unittest.TestCase):
+    def test_magnitude_distance_cutoff_and_sigma_bins(self):
+        from gm import train
+
+        self.assertEqual(list(train.magnitude_distance_limit([4.0, 5.0, 7.0], 300.0)), [80.0, 200.0, 300.0])
+        df = synth.make_flatfile(80, seed=7)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "ff.csv"
+            df.to_csv(path, index=False)
+            table = train.run(path, Path(d) / "out", ["pga"], ["baseline"], plots=False, mag_dist_cutoff=True,
+                              max_dist=300.0)
+            kept = json.loads((Path(d) / "out" / "run.json").read_text())["n_rows"]
+        limit = train.magnitude_distance_limit(df["mag"], 300.0)
+        self.assertEqual(kept, int((df["rhypo_km"] <= limit).sum()))
+        self.assertTrue(any(c.startswith("cv_sigma_M") for c in table.columns))
 
 
 if __name__ == "__main__":

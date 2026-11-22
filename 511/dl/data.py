@@ -62,9 +62,10 @@ def channel_mask(metadata, prefixes):
     """Rows whose instrument code (first two letters of trace_channel, e.g. HH, EH, HN) is in prefixes."""
     if not prefixes:
         return np.ones(len(metadata), dtype=bool)
-    if "trace_channel" not in metadata.columns:
-        raise SystemExit("dataset has no trace_channel column; cannot filter by channel")
-    code = metadata["trace_channel"].astype(str).str.upper().str[:2]
+    col = next((c for c in ("trace_channel", "station_channel") if c in metadata.columns), None)
+    if col is None:
+        raise SystemExit("dataset has no trace_channel/station_channel column; cannot filter by channel")
+    code = metadata[col].astype(str).str.upper().str[:2]
     return code.isin([p.upper()[:2] for p in prefixes]).to_numpy()
 
 
@@ -143,3 +144,24 @@ def hypocentral_distance_km(meta):
     if not np.isfinite(depth):
         depth = 10.0
     return float(np.hypot(float(epi), depth))
+
+
+SNR_COLUMNS = [  # per-component SNR in dB, as named by AQ2009 (vel/counts) and INSTANCE / STEAD
+    ("trace_z_snr_db_vel", "trace_n_snr_db_vel", "trace_e_snr_db_vel"),
+    ("trace_Z_snr_db", "trace_N_snr_db", "trace_E_snr_db"),
+    ("trace_z_snr_db_counts", "trace_n_snr_db_counts", "trace_e_snr_db_counts"),
+    ("trace_snr_db",),
+]
+
+
+def snr_mask(metadata, min_db):
+    """Keep traces whose every available component has SNR >= min_db (dead channels have NaN and are dropped)."""
+    for cols in SNR_COLUMNS:
+        if all(c in metadata.columns for c in cols):
+            snr = metadata[list(cols)].apply(pd.to_numeric, errors="coerce")
+            if cols == ("trace_snr_db",):  # STEAD stores "[z n e]" strings
+                snr = metadata["trace_snr_db"].astype(str).str.strip("[]").str.split(expand=True).apply(
+                    pd.to_numeric, errors="coerce")
+            return (snr.min(axis=1, skipna=False) >= min_db).to_numpy(), list(cols)
+    return None, []
+

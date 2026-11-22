@@ -18,14 +18,37 @@ import numpy as np
 import pandas as pd
 
 from . import INTENSITY_MEASURES
-from .evaluate import grouped_cv, metrics
+from .evaluate import grouped_cv, metrics, residual_components
 from .features import feature_frame, target_vector
 from .flatfile import TARGETS, load
 from .models import MODEL_NAMES, make_model
 
 
+MAG_BINS = [(4.0, 4.5), (4.5, 5.0), (5.0, 6.0), (6.0, 9.0)]
+
+
+def magnitude_distance_limit(mag, max_dist=300.0):
+    """Magnitude-dependent distance cutoff (km): 80 km at M4, +120 km per magnitude unit, capped.
+
+    Small events recorded far away sit at the noise level of the instruments and dominate the
+    scatter; NGA-West2 applies the same kind of M-dependent truncation.
+    """
+    return np.clip(80.0 + 120.0 * (np.asarray(mag, float) - 4.0), 80.0, max_dist)
+
+
+def sigma_by_magnitude(mag, resid, groups):
+    out = {}
+    for lo, hi in MAG_BINS:
+        m = (mag >= lo) & (mag < hi)
+        if m.sum() >= 30 and len(np.unique(groups[m])) >= 3:
+            c = residual_components(resid[m], groups[m])
+            out[f"cv_sigma_M{lo:g}-{hi:g}"] = c["sigma"]
+            out[f"n_M{lo:g}-{hi:g}"] = int(m.sum())
+    return out
+
+
 def run(flatfile, out, targets, models, distance="rhypo", n_splits=5, seed=0, plots=True,
-        max_dist=None, min_mag=None, require_vs30=False):
+        max_dist=None, min_mag=None, require_vs30=False, mag_dist_cutoff=False):
     out = Path(out)
     (out / "models").mkdir(parents=True, exist_ok=True)
     df = load(flatfile)
@@ -36,6 +59,10 @@ def run(flatfile, out, targets, models, distance="rhypo", n_splits=5, seed=0, pl
         df = df[df["mag"] >= min_mag]
     if require_vs30:
         df = df[df["vs30_ms"].notna()]
+    if mag_dist_cutoff:
+        from .features import distance as dist_of
+
+        df = df[dist_of(df, distance) <= magnitude_distance_limit(df["mag"], max_dist or 300.0)]
     df = df.reset_index(drop=True)
     if len(df) != n0:
         print(f"filters kept {len(df)}/{n0} recordings, {df['event_id'].nunique()} events")
@@ -57,6 +84,7 @@ def run(flatfile, out, targets, models, distance="rhypo", n_splits=5, seed=0, pl
             fit = metrics(y, final.predict(X), groups)
             row = {"target": target, "model": name, "distance": distance,
                    **{f"cv_{k}": v for k, v in cv.items()}, **{f"fit_{k}": v for k, v in fit.items()}}
+            row.update(sigma_by_magnitude(X["mag"].to_numpy(), y - oof, groups))
             if name == "baseline":
                 row.update({f"coef_{k}": v for k, v in final.summary().items()})
             rows.append(row)
@@ -112,12 +140,16 @@ def main(argv=None):
     p.add_argument("--max-dist", type=float, help="drop recordings beyond this hypocentral distance (km)")
     p.add_argument("--min-mag", type=float)
     p.add_argument("--require-vs30", action="store_true", help="drop rows without Vs30 instead of assuming 760 m/s")
+    p.add_argument("--mag-dist-cutoff", action="store_true",
+                   help="keep R <= 80 km + 120 km per magnitude unit above M4 (capped at --max-dist or 300 km)")
     p.add_argument("--no-plots", action="store_true")
     a = p.parse_args(argv)
     table = run(a.flatfile, a.out, a.targets, a.models, a.distance, a.splits, plots=not a.no_plots,
-                max_dist=a.max_dist, min_mag=a.min_mag, require_vs30=a.require_vs30)
+                max_dist=a.max_dist, min_mag=a.min_mag, require_vs30=a.require_vs30,
+                mag_dist_cutoff=a.mag_dist_cutoff)
     cols = ["target", "model", "cv_rmse", "cv_r2", "cv_tau", "cv_phi", "cv_sigma"]
-    print(table[cols].to_string(index=False))
+    cols += [c for c in table.columns if c.startswith("cv_sigma_M")]
+    print(table[cols].round(3).to_string(index=False))
 
 
 if __name__ == "__main__":
