@@ -6,3 +6,6 @@
 /512/outputs/
 /vasteq/deployment/.secrets/
 /vasteq/deployment/.env
+**/.venv*/
+/logs/
+/run_512.sh

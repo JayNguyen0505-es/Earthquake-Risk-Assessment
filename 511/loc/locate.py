@@ -53,9 +53,18 @@ def _as_table(model):
 
 class Locator:
     def __init__(self, stations, model=None, sigma_p=0.1, sigma_s=0.2, norm="l2",
-                 depth_range=(0.5, 40.0), grid_step_km=5.0, depth_step_km=5.0, margin_km=50.0):
+                 depth_range=(0.5, 40.0), grid_step_km=5.0, depth_step_km=5.0, margin_km=50.0,
+                 elevation_correction=True):
         self.stations = stations.set_index("station")
         self.tt = _as_table(model)
+        # station elevation delay: extra vertical path through the top layer (depths are below sea level)
+        elev = self.stations["elev_km"].astype(float).fillna(0.0) if "elev_km" in self.stations else \
+            pd.Series(0.0, index=self.stations.index)
+        vm = getattr(self.tt, "model", None)
+        if elevation_correction and vm is not None:
+            self.delay = {"P": elev / vm.vp[0], "S": elev / vm.vs[0]}
+        else:
+            self.delay = {"P": elev * 0.0, "S": elev * 0.0}
         self.sigma = {"P": sigma_p, "S": sigma_s}
         self.norm = norm
         self.depth_range = depth_range
@@ -74,10 +83,14 @@ class Locator:
         is_p = (picks["phase"].to_numpy() == "P")
         return sx, sy, is_p
 
+    def _delays(self, picks, is_p):
+        st = picks["station"]
+        return np.where(is_p, self.delay["P"].loc[st].to_numpy(), self.delay["S"].loc[st].to_numpy())
+
     def predicted(self, x, y, z, picks):
         sx, sy, is_p = self._pick_arrays(picks)
         dist = np.hypot(sx - x, sy - y)
-        return np.where(is_p, self.tt(dist, z, "P"), self.tt(dist, z, "S"))
+        return np.where(is_p, self.tt(dist, z, "P"), self.tt(dist, z, "S")) + self._delays(picks, is_p)
 
     def _residuals(self, tt, t_obs, w):
         t0 = np.sum(w * (t_obs - tt), axis=-1, keepdims=True) / np.sum(w)
@@ -110,7 +123,7 @@ class Locator:
         sx, sy, is_p = self._pick_arrays(picks)
         dist = np.hypot(sx[None, :] - nodes[:, :1], sy[None, :] - nodes[:, 1:2])   # nodes x picks
         z = np.repeat(nodes[:, 2:3], len(picks), axis=1)
-        tt = np.where(is_p[None, :], self.tt(dist, z, "P"), self.tt(dist, z, "S"))
+        tt = np.where(is_p[None, :], self.tt(dist, z, "P"), self.tt(dist, z, "S")) + self._delays(picks, is_p)[None, :]
         r, _ = self._residuals(tt, t_obs[None, :], w[None, :])
         f = np.sum(np.sqrt(w) * np.abs(r), axis=1) if self.norm == "l1" else np.sum(w * r ** 2, axis=1)
         return nodes[int(np.argmin(f))]

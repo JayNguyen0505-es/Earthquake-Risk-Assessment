@@ -23,7 +23,11 @@ Work package 5
 ## 5.1.1
 We are going to build, train, and evaluate machine learning, deep learning models for estimation of earthquake parameters from sensors data around the world.
 Source code for this work package should be located in ```./511/``` folder.
-See [511/README.md](511/README.md) for setup, waveform inspection, and the initial research sequence.
+See [511/README.md](511/README.md) for setup, waveform inspection, and the initial research sequence,
+and its "Open-data programme" section for phase picking (A), the end-to-end network benchmark on
+Central Italy and Ridgecrest (B) and deep-learning magnitude (C).
+
+Running both work packages on the lab's NVIDIA DGX Spark: [docs/DGX.md](docs/DGX.md).
 
 ## 5.1.2
 We are going to build, train, and evaluate machine learning, deep learning models for estimation of soil vibration (PGA, PSA).

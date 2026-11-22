@@ -1,0 +1,57 @@
+{
+  "_note": "Regions for the end-to-end 5.1.1 benchmark. Each is sized like the NW Vietnam network (~120 x 110 km) and thinned to 20 stations by default, so detection, location and magnitude errors are representative of a sparse 20-station network. bbox = [min_lon, min_lat, max_lon, max_lat]. Velocity layers are [depth_to_top_km, Vp_km_s].",
+  "central_italy": {
+    "name": "Central Italy - Amatrice-Visso-Norcia sequence (INGV)",
+    "provider": "INGV",
+    "catalog_providers": ["INGV"],
+    "bbox": [12.75, 42.35, 13.75, 43.25],
+    "station_margin_deg": 0.15,
+    "networks": "IV,MN,IT",
+    "channel_priority": ["HH", "EH", "HN"],
+    "n_stations": 20,
+    "start": "2016-11-15T00:00:00",
+    "end": "2016-11-17T00:00:00",
+    "catalog_minmag": 0.5,
+    "velocity": {
+      "vp_vs": 1.83,
+      "layers": [[0.0, 4.8], [2.0, 5.5], [6.0, 6.3], [12.0, 6.6], [20.0, 7.0], [28.0, 7.3], [35.0, 8.0]],
+      "source": "Approximate central-Apennines profile (Vp 5.4-5.7 km/s in 0-6 km, 6.3-6.6 in 6-12 km, 6.6-7.3 in 14-28 km, Vp/Vs 1.83; Geosciences 10(1):17, 2020). Replace with Chiaraluce et al. (2011, JGR, doi:10.1029/2011JB008352) for publication."
+    },
+    "ml": {"a": 1.11, "b": 0.00189, "c": -2.09, "source": "IASPEI standard ML (Hutton & Boore 1987 form)"}
+  },
+  "ridgecrest": {
+    "name": "Ridgecrest, California - 2019 sequence (SCEDC)",
+    "provider": "SCEDC",
+    "catalog_providers": ["SCEDC", "USGS"],
+    "bbox": [-118.15, 35.25, -117.05, 36.25],
+    "station_margin_deg": 0.15,
+    "networks": "CI",
+    "channel_priority": ["HH", "EH", "HN"],
+    "n_stations": 20,
+    "start": "2019-07-15T00:00:00",
+    "end": "2019-07-17T00:00:00",
+    "catalog_minmag": 0.5,
+    "velocity": {
+      "vp_vs": 1.73,
+      "layers": [[0.0, 5.5], [5.5, 6.3], [16.0, 6.7], [32.0, 7.8]],
+      "source": "SCSN Hadley-Kanamori (1977) southern California model, https://strike.scec.org/scecpedia/Hadley-Kanamori"
+    },
+    "ml": {"a": 1.11, "b": 0.00189, "c": -2.09, "source": "IASPEI standard ML (Hutton & Boore 1987, southern California)"}
+  },
+  "nw_vietnam": {
+    "name": "NW Vietnam - VAST-Earthquake 4.0 network (local files, no FDSN service yet)",
+    "provider": null,
+    "catalog_providers": [],
+    "bbox": [102.9, 21.1, 104.1, 22.5],
+    "station_margin_deg": 0.1,
+    "networks": "VN",
+    "channel_priority": ["HL", "HN"],
+    "n_stations": 20,
+    "velocity": {
+      "vp_vs": 1.73,
+      "layers": [[0.0, 5.0], [2.0, 5.8], [12.0, 6.3], [24.0, 6.9], [36.0, 8.0]],
+      "source": "Generic crust placeholder (511/config/velocity_nw_vietnam.csv) until the Institute's model (checklist B5)"
+    },
+    "ml": {"a": 1.11, "b": 0.00189, "c": -2.09, "source": "IASPEI standard ML; regional calibration pending"}
+  }
+}

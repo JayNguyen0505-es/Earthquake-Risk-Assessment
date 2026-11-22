@@ -23,7 +23,8 @@ open recordings ──► unified flatfile ──► features ──► models �
   are consistent. Replace with the Institute's measured Vs30 map (WP 2) when available.
 * `gm/baseline.py` – GMPE-form regression (Boore–Atkinson 2008 shape, pseudo-depth by grid search)
   fitted on the same data: the "traditional" model the ML models must beat.
-* `gm/models.py` – RandomForest, HistGradientBoosting, MLP (scikit-learn only).
+* `gm/models.py` – RandomForest, HistGradientBoosting, MLP (scikit-learn only), and `hybrid` = GMPE
+  baseline + GBM on its residuals (trees alone cannot extrapolate to rare large magnitudes).
 * `gm/evaluate.py` – metrics in ln units with between-event τ, within-event φ, total σ; event-grouped
   K-fold so no test event leaks into training.
 * `gm/scenario.py` – scenario PGA/PSA maps on a regular grid over a city (CSV, GeoTIFF for QGIS /
@@ -46,25 +47,19 @@ on real recordings.
 ## With real open data
 
 ```bash
-# 1. observed ground motions from USGS ShakeMaps (worldwide, M>=4.5, ~tens of thousands of rows)
-python 512/fetch_shakemap.py --start 2015-01-01 --end 2025-12-31 --minmag 4.5 --out data/gm/shakemap_flatfile.csv
-#    optional: restrict to a tectonically similar region, e.g. continental Asia
-#    --bbox 60 5 125 45
-
-# 2. Vs30 for every recording station (ShakeMap station lists carry no Vs30)
+# 1. Vs30 grid (needed to fill stations of older ShakeMap 3.5 events, which carry no vs30)
 python 512/vs30.py download --dest data/gm/vs30
-python - <<'EOF'
-import pandas as pd, sys; sys.path.insert(0, "512")
-from gm.vs30 import sample_points
-df = pd.read_csv("data/gm/shakemap_flatfile.csv")
-df["vs30_ms"] = sample_points("data/gm/vs30/global_vs30.grd", df["st_lat"], df["st_lon"])
-df.to_csv("data/gm/shakemap_flatfile_vs30.csv", index=False)
-EOF
+
+# 2. observed ground motions from USGS ShakeMaps. Use California (dense ANSS networks, active
+#    shallow crust like NW Vietnam): outside the US, ShakeMaps have almost no instrumental stations.
+python 512/fetch_shakemap.py --start 2010-01-01 --end 2025-12-31 --minmag 4 --bbox -125 32 -114 42 \
+    --vs30-grid data/gm/vs30/global_vs30.grd --out data/gm/shakemap_ca.csv
 
 # 3. train / evaluate / map
-python 512/train.py --flatfile data/gm/shakemap_flatfile_vs30.csv --out 512/outputs/shakemap --targets pga pgv sa_0.3 sa_1.0 sa_3.0
+python 512/train.py --flatfile data/gm/shakemap_ca.csv --out 512/outputs/ca --targets pga pgv sa_0.3 sa_1.0 sa_3.0 \
+    --distance rrup --max-dist 200 --models baseline hybrid gbm rf mlp
 python 512/vs30.py sample --grid data/gm/vs30/global_vs30.grd --stations data/stations.xlsx --out data/gm/stations_vs30.csv
-python 512/scenario_map.py --model 512/outputs/shakemap/models/pga_gbm.joblib --scenario tuan_giao_1983 --city dien_bien --vs30-grid data/gm/vs30/global_vs30.grd
+python 512/scenario_map.py --model 512/outputs/ca/models/pga_hybrid.joblib --scenario tuan_giao_1983 --city dien_bien --vs30-grid data/gm/vs30/global_vs30.grd
 ```
 
 PEER NGA-West2 (the dataset named in the proposal) needs a free account; download the flatfile
