@@ -176,7 +176,7 @@ class ScenarioTests(unittest.TestCase):
         bundle = {"model": BaselineGMPE().fit(X, y), "target": "pga", "distance": "rhypo"}
         grid = grid_over_bbox(None, cfg["cities"]["lai_chau"]["bbox"], 0.02)
         scn = dict(cfg["scenarios"]["extreme_lai_chau"], id="x")
-        table = scenario.predict_map(bundle, scn, grid)
+        table = scenario.predict_map(bundle, scn, grid, finite_fault=False)
         self.assertEqual(len(table), len(grid))
         self.assertTrue((table["pga"] > 0).all())
         # attenuation: the node closest to the epicentre has the largest PGA
@@ -195,6 +195,33 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(list(st.columns[:0]), [])
         self.assertAlmostEqual(st.loc[0, "lat"], 21.2)
         self.assertEqual(st.loc[0, "station"], 4001)
+
+
+class FiniteFaultTests(unittest.TestCase):
+    def test_distances_to_vertical_fault(self):
+        scn = {"lat": 22.0, "lon": 103.0, "depth_km": 12.0, "mag": 7.0, "strike_deg": 0.0}
+        length, width = scenario.rupture_dimensions(7.0)
+        self.assertAlmostEqual(length, 10 ** (-2.57 + 0.62 * 7.0), places=6)   # ~59 km
+        lat = np.array([22.0 + 10 / 111.19, 22.0, 22.0 + (length / 2 + 10) / 111.19])
+        lon = np.array([103.0, 103.0 + 5 / (111.19 * np.cos(np.radians(22.0))), 103.0])
+        rjb, rrup, geo = scenario.finite_fault_distances(scn, lat, lon)
+        self.assertAlmostEqual(rjb[0], 0.0, delta=0.05)      # on the trace, inside the rupture
+        self.assertAlmostEqual(rjb[1], 5.0, delta=0.05)      # 5 km east of the trace
+        self.assertAlmostEqual(rjb[2], 10.0, delta=0.05)     # 10 km beyond the rupture end
+        self.assertTrue(np.allclose(rrup, np.hypot(rjb, geo["ztop_km"])))
+        self.assertLess(geo["ztop_km"], 12.0)
+
+    def test_finite_fault_raises_near_field_shaking(self):
+        cfg = scenario.load_config()
+        df = synth.make_flatfile(80, seed=5)
+        bundle = {"model": BaselineGMPE().fit(feature_frame(df, "rrup"), target_vector(df, "pga_g")),
+                  "target": "pga", "distance": "rrup"}
+        grid = grid_over_bbox(None, cfg["cities"]["lai_chau"]["bbox"], 0.02)
+        scn = dict(cfg["scenarios"]["extreme_lai_chau"], id="x")
+        point = scenario.predict_map(bundle, scn, grid, finite_fault=False)
+        finite = scenario.predict_map(bundle, scn, grid, finite_fault=True)
+        self.assertGreater(finite["pga"].max(), point["pga"].max())
+        self.assertTrue((finite["rrup_km"] <= point["rrup_km"] + 1e-9).all())
 
 
 class TrainFilterTests(unittest.TestCase):

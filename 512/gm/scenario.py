@@ -32,10 +32,44 @@ def load_config(path=CONFIG):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def scenario_frame(scn, grid):
-    """Pseudo-flatfile rows for every grid node of one scenario (point source)."""
+def rupture_dimensions(mag):
+    """Strike-slip subsurface rupture length and down-dip width (km), Wells & Coppersmith (1994)."""
+    length = 10 ** (-2.57 + 0.62 * mag)
+    width = 10 ** (-0.76 + 0.27 * mag)
+    return float(length), float(width)
+
+
+def finite_fault_distances(scn, lat, lon, seismogenic_depth_km=20.0):
+    """Rjb and Rrup (km) to a vertical rectangular fault centred on the epicentre along ``strike_deg``.
+
+    Length/width from Wells & Coppersmith (1994); the fault is centred on the hypocentre in depth,
+    clipped to [0, seismogenic depth]. For a vertical fault Rjb is the distance to the surface
+    projection (a line segment) and Rrup = sqrt(Rjb^2 + ztop^2).
+    """
+    length, width = rupture_dimensions(scn["mag"])
+    width = min(width, seismogenic_depth_km)
+    ztop = float(np.clip(scn["depth_km"] - width / 2, 0.0, seismogenic_depth_km - width))
+    lat0, lon0 = scn["lat"], scn["lon"]
+    x = np.radians(np.asarray(lon) - lon0) * 6371.0 * np.cos(np.radians(lat0))
+    y = np.radians(np.asarray(lat) - lat0) * 6371.0
+    th = np.radians(scn["strike_deg"])
+    ux, uy = np.sin(th), np.cos(th)                      # unit vector along strike (east, north)
+    t = np.clip(x * ux + y * uy, -length / 2, length / 2)  # projection on the trace, clipped to its ends
+    rjb = np.hypot(x - t * ux, y - t * uy)
+    rrup = np.hypot(rjb, ztop)
+    return rjb, rrup, {"length_km": length, "width_km": width, "ztop_km": ztop}
+
+
+def scenario_frame(scn, grid, finite_fault=None):
+    """Pseudo-flatfile rows for every grid node of one scenario.
+
+    Point source by default; a finite vertical fault when the scenario has ``strike_deg`` and
+    M >= 6 (or ``finite_fault=True``). A point source puts every site at least one focal depth
+    away and under-predicts near-fault shaking for large events.
+    """
     repi = haversine_km(scn["lat"], scn["lon"], grid["lat"].to_numpy(), grid["lon"].to_numpy())
     rhypo = np.hypot(repi, scn["depth_km"])
+    use_ff = finite_fault if finite_fault is not None else ("strike_deg" in scn and scn["mag"] >= 6.0)
     df = pd.DataFrame({c: np.nan for c in COLUMNS}, index=grid.index)
     df["event_id"] = scn.get("id", "scenario")
     df["station_id"] = [f"G{i}" for i in grid.index]
@@ -44,19 +78,24 @@ def scenario_frame(scn, grid):
     df["ev_lat"], df["ev_lon"] = scn["lat"], scn["lon"]
     df["st_lat"], df["st_lon"] = grid["lat"].to_numpy(), grid["lon"].to_numpy()
     df["repi_km"], df["rhypo_km"] = repi, rhypo
-    df["rjb_km"], df["rrup_km"] = repi, rhypo  # point-source approximation
+    if use_ff:
+        rjb, rrup, _ = finite_fault_distances(scn, grid["lat"].to_numpy(), grid["lon"].to_numpy())
+        df["rjb_km"], df["rrup_km"] = rjb, rrup
+    else:
+        df["rjb_km"], df["rrup_km"] = repi, rhypo  # point-source approximation
     df["vs30_ms"] = grid["vs30_ms"].to_numpy()
     df["mech"] = scn.get("mech", "U")
     df["source"] = "scenario"
     return df
 
 
-def predict_map(bundle, scn, grid):
-    df = scenario_frame(scn, grid)
+def predict_map(bundle, scn, grid, finite_fault=None):
+    df = scenario_frame(scn, grid, finite_fault)
     X = feature_frame(df, bundle.get("distance", "rhypo"))
     ln_y = bundle["model"].predict(X)
     out = grid.copy()
     out["repi_km"] = df["repi_km"].to_numpy()
+    out["rrup_km"] = df["rrup_km"].to_numpy()
     out[bundle["target"]] = np.exp(ln_y)
     return out
 
@@ -89,6 +128,13 @@ def write_outputs(table, target, out_dir, name, step_deg, scn):
     cs = ax.contour(lons, lats, arr[::-1], colors="k", linewidths=0.5)
     ax.clabel(cs, fontsize=7, fmt="%.2f")
     ax.plot(scn["lon"], scn["lat"], "k*", ms=12, label="epicentre")
+    if "strike_deg" in scn and scn["mag"] >= 6.0:
+        half = rupture_dimensions(scn["mag"])[0] / 2
+        th = np.radians(scn["strike_deg"])
+        dlat = half * np.cos(th) / 111.19
+        dlon = half * np.sin(th) / (111.19 * np.cos(np.radians(scn["lat"])))
+        ax.plot([scn["lon"] - dlon, scn["lon"] + dlon], [scn["lat"] - dlat, scn["lat"] + dlat], "k-", lw=2,
+                label=f"rupture {2 * half:.0f} km (assumed strike {scn['strike_deg']:.0f}°)")
     ax.set_title(f"{scn.get('name', scn.get('id'))}  M{scn['mag']}  depth {scn['depth_km']} km  -  {target}")
     ax.set_xlabel("lon")
     ax.set_ylabel("lat")
@@ -113,7 +159,8 @@ def run(model_path, scenario_id, city_id, out_dir, vs30_grid=None, step_deg=None
     name = f"{city_id}_{scenario_id}_{bundle['target']}"
     stem = write_outputs(table, bundle["target"], out_dir, name, step, scn)
     print(f"{name}: max {bundle['target']} = {table[bundle['target']].max():.3f}, "
-          f"min epicentral distance {table['repi_km'].min():.1f} km -> {stem}.{{csv,tif,png}}")
+          f"min epicentral distance {table['repi_km'].min():.1f} km, min Rrup {table['rrup_km'].min():.1f} km "
+          f"-> {stem}.{{csv,tif,png}}")
     return table
 
 
