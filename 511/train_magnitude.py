@@ -30,7 +30,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from dl.data import apply_filters, data_unit, earthquake_mask, is_physical_unit, load_dataset, split_dataset  # noqa: E402
+from dl.data import (apply_filters, data_unit, earthquake_mask, is_physical_unit, load_dataset,  # noqa: E402
+                     snr_mask, split_dataset)
 from dl.magnet import (DEFAULT_PRE, DEFAULT_WINDOW, ScalarScaler, build_model, combine_station_estimates,  # noqa: E402
                        gaussian_nll, make_generator, scalar_matrix)
 
@@ -127,6 +128,7 @@ def main(argv=None):
     p.add_argument("--mag-types", nargs="*", help="keep only these source_magnitude_type values, e.g. ML Mw")
     p.add_argument("--min-mag", type=float, default=-1.0)
     p.add_argument("--max-dist", type=float, default=300.0, help="drop traces beyond this epicentral distance (km)")
+    p.add_argument("--min-snr-db", type=float, help="keep traces whose every component has SNR >= this (drops dead channels)")
     p.add_argument("--use-amplitude", default="auto", choices=["auto", "yes", "no"])
     p.add_argument("--window", type=int, default=DEFAULT_WINDOW)
     p.add_argument("--pre", type=int, default=DEFAULT_PRE)
@@ -157,7 +159,16 @@ def main(argv=None):
     if "path_ep_distance_km" in md.columns:
         d = md["path_ep_distance_km"].astype(float)
         mask &= (d.isna() | (d <= a.max_dist)).to_numpy()
+    if a.min_snr_db is not None:
+        m_snr, cols = snr_mask(md, a.min_snr_db)
+        if m_snr is None:
+            print("warning: no SNR columns in this dataset; --min-snr-db ignored")
+        else:
+            print(f"SNR >= {a.min_snr_db} dB on {cols}: keeps {int((mask & m_snr).sum())}/{int(mask.sum())} traces")
+            mask &= m_snr
     ds.filter(mask, inplace=True)
+    print(f"magnitude of kept traces: mean {ds.metadata['source_magnitude'].mean():.2f}, "
+          f"std {ds.metadata['source_magnitude'].std():.2f}, max {ds.metadata['source_magnitude'].max():.2f}")
     measurement, unit = data_unit(ds)
     physical = is_physical_unit(ds)
     use_amp = physical if a.use_amplitude == "auto" else a.use_amplitude == "yes"

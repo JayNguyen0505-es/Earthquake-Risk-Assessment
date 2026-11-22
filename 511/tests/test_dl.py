@@ -19,6 +19,21 @@ sys.path.insert(0, str(HERE))
 HAVE_DL = all(importlib.util.find_spec(m) for m in ("seisbench", "torch"))
 
 
+class FilterTests(unittest.TestCase):
+    def test_snr_and_station_channel(self):
+        import pandas as pd
+
+        from dl.data import channel_mask, snr_mask
+
+        md = pd.DataFrame({"station_channel": ["HH", "HN", "EH"],
+                           "trace_z_snr_db_vel": [20.0, 5.0, np.nan], "trace_n_snr_db_vel": [15.0, 30.0, 30.0],
+                           "trace_e_snr_db_vel": [12.0, 30.0, 30.0]})
+        self.assertEqual(list(channel_mask(md, ["HN"])), [False, True, False])
+        m, cols = snr_mask(md, 10.0)
+        self.assertEqual(list(m), [True, False, False])  # low Z SNR and dead (NaN) channel both dropped
+        self.assertEqual(snr_mask(pd.DataFrame({"x": [1]}), 10.0)[0], None)
+
+
 class STALTATests(unittest.TestCase):
     def test_picks_synthetic_arrivals(self):
         from dl.stalta import STALTAPicker
