@@ -124,7 +124,8 @@ def write_outputs(table, target, out_dir, name, step_deg, scn):
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(7, 6))
-    im = ax.imshow(arr, extent=[lons[0], lons[-1], lats[0], lats[-1]], origin="upper", cmap="YlOrRd", aspect="auto")
+    aspect = 1.0 / np.cos(np.radians(float(np.mean(lats))))  # equal km in both directions
+    im = ax.imshow(arr, extent=[lons[0], lons[-1], lats[0], lats[-1]], origin="upper", cmap="YlOrRd", aspect=aspect)
     cs = ax.contour(lons, lats, arr[::-1], colors="k", linewidths=0.5)
     ax.clabel(cs, fontsize=7, fmt="%.2f")
     ax.plot(scn["lon"], scn["lat"], "k*", ms=12, label="epicentre")
@@ -135,11 +136,13 @@ def write_outputs(table, target, out_dir, name, step_deg, scn):
         dlon = half * np.sin(th) / (111.19 * np.cos(np.radians(scn["lat"])))
         ax.plot([scn["lon"] - dlon, scn["lon"] + dlon], [scn["lat"] - dlat, scn["lat"] + dlat], "k-", lw=2,
                 label=f"rupture {2 * half:.0f} km (assumed strike {scn['strike_deg']:.0f}°)")
+    ax.set_xlim(lons[0], lons[-1])
+    ax.set_ylim(lats[0], lats[-1])
     ax.set_title(f"{scn.get('name', scn.get('id'))}  M{scn['mag']}  depth {scn['depth_km']} km  -  {target}")
     ax.set_xlabel("lon")
     ax.set_ylabel("lat")
     ax.legend(loc="lower right")
-    fig.colorbar(im, ax=ax, label=target)
+    fig.colorbar(im, ax=ax, label=f"{target} (g)" if target != "pgv" else "pgv (cm/s)", shrink=0.75)
     fig.tight_layout()
     fig.savefig(stem.with_suffix(".png"), dpi=130)
     plt.close(fig)
