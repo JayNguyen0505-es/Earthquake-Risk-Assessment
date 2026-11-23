@@ -27,6 +27,7 @@ PATTERNS = [
     "511/outputs/magnitude/*/metrics.json", "511/outputs/magnitude/*/*.png", "511/outputs/magnitude/*/training_history.csv",
     "511/outputs/finetune/*/training.json",
     "511/outputs/e2e/*/*/metrics.json", "511/outputs/e2e/*/*/*.png", "511/outputs/e2e/*/*/recall_by_magnitude.csv",
+    "511/outputs/e2e/*/*/magnitude_error_by_bin.csv",
     "data/e2e/*/run.json", "data/e2e/*/stations.csv",
 ]
 
@@ -88,9 +89,13 @@ def section_e2e(root):
         e = m.get("events", {})
         med = lambda k: (e.get(k) or {}).get("median") if isinstance(e.get(k), dict) else None  # noqa: E731
         pa = m.get("picks_vs_analyst", {})
+        g = m.get("events_in_region", {})
         rows.append({"run": Path(f).parts[-3], "picker": Path(f).parts[-2], "picks": m.get("n_picks"),
                      "ref": e.get("n_reference"), "matched": e.get("n_matched"), "recall": e.get("recall"),
-                     "precision": e.get("precision"), "epi_km_med": med("epicentre_error_km"),
+                     "precision": e.get("precision"), "det_in_box": g.get("n_detected_in_bbox"),
+                     "prec_box": g.get("precision_in_bbox"), "prec_box_M": g.get("precision_in_bbox_above_minmag"),
+                     "unmatched_ML_med": (g.get("unmatched_in_bbox_ml") or {}).get("median"),
+                     "epi_km_med": med("epicentre_error_km"),
                      "dz_km_med": med("depth_error_km"), "dML_med": med("ml_minus_reference"),
                      "dMdl_med": med("m_dl_minus_reference"),
                      "P_recall_vs_analyst": (pa.get("P") or {}).get("recall"),
@@ -99,6 +104,10 @@ def section_e2e(root):
     for f in sorted(glob.glob(str(root / "511/outputs/e2e/*/*/recall_by_magnitude.csv"))):
         if "phasenet_instance" in f:
             out.append(f"recall by magnitude, {Path(f).parts[-3]} / {Path(f).parts[-2]}:\n")
+            out.append(md_table(pd.read_csv(f)))
+    for f in sorted(glob.glob(str(root / "511/outputs/e2e/*/*/magnitude_error_by_bin.csv"))):
+        if "phasenet_instance" in f:
+            out.append(f"magnitude error by reference magnitude, {Path(f).parts[-3]} / {Path(f).parts[-2]}:\n")
             out.append(md_table(pd.read_csv(f)))
     return "\n".join(out)
 

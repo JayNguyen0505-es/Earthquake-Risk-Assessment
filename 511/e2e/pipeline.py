@@ -13,7 +13,8 @@ from loc.geometry import from_local_km, to_local_km
 from loc.locate import Locator
 from loc.velocity import TravelTimeTable
 
-from .evaluate import event_metrics, match_events, pick_metrics, plot_all, recall_by_magnitude
+from .evaluate import (event_metrics, magnitude_error_by_bin, match_events, pick_metrics, plot_all,
+                       recall_by_magnitude, region_metrics)
 from .magnitude import event_dl_magnitude, event_local_magnitude
 
 
@@ -174,6 +175,13 @@ def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_th
         by_mag = recall_by_magnitude(ref, matches)
         by_mag.to_csv(out_dir / "recall_by_magnitude.csv", index=False)
         metrics["recall_by_magnitude"] = by_mag.to_dict(orient="records")
+        if len(det) and "bbox" in region:
+            metrics["events_in_region"] = region_metrics(det, ref, matches, region["bbox"],
+                                                         region.get("catalog_minmag"))
+            mag_bins = magnitude_error_by_bin(det, ref, matches)
+            if len(mag_bins):
+                mag_bins.to_csv(out_dir / "magnitude_error_by_bin.csv", index=False)
+                metrics["magnitude_error_by_bin"] = mag_bins.to_dict(orient="records")
         if len(matches):
             m = matches.copy()
             m["det_id"] = det.iloc[m["det"]]["event_id"].to_numpy()

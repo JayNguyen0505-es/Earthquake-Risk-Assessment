@@ -108,6 +108,10 @@ def split_dataset(ds, mode="event", fractions=(0.8, 0.1, 0.1), seed=0):
 
 def apply_filters(ds, channels=None, earthquakes_only=False, require=None):
     mask = channel_mask(ds.metadata, channels)
+    if channels and not mask.any():
+        col = next(c for c in ("trace_channel", "station_channel") if c in ds.metadata.columns)
+        have = sorted(ds.metadata[col].astype(str).str.upper().str[:2].unique())
+        raise SystemExit(f"no traces with instrument code {' '.join(channels)}; this dataset has {' '.join(have)}")
     if earthquakes_only:
         mask &= earthquake_mask(ds.metadata)
     for col in require or []:

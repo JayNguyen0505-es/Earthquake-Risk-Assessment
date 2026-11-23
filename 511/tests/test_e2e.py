@@ -86,6 +86,24 @@ class EvaluateTests(unittest.TestCase):
         tab = recall_by_magnitude(ref, m)
         self.assertEqual(int(tab["n_detected"].sum()), 1)
 
+    def test_region_precision_and_magnitude_bins(self):
+        from e2e.evaluate import magnitude_error_by_bin, region_metrics
+
+        ref = pd.DataFrame({"event_id": ["a", "b"], "time_s": [0.0, 100.0], "lat": [42.8, 42.9], "lon": [13.1, 13.2],
+                            "depth_km": [10, 10], "mag": [1.2, 2.2]})
+        det = pd.DataFrame({"time_s": [0.2, 100.1, 300.0, 400.0, 500.0], "lat": [42.8, 42.9, 42.7, 44.0, 42.6],
+                            "lon": [13.1, 13.2, 13.3, 11.5, 13.0], "depth_km": [9] * 5,
+                            "ml": [1.0, 2.5, 0.2, 2.0, 1.1]})
+        m = match_events(det, ref)
+        g = region_metrics(det, ref, m, [12.75, 42.35, 13.75, 43.25], minmag=0.5)
+        self.assertEqual(g["n_detected_outside_bbox"], 1)                 # the event at 44.0 N, 11.5 E
+        self.assertAlmostEqual(g["precision_in_bbox"], 2 / 4)
+        self.assertAlmostEqual(g["precision_in_bbox_above_minmag"], 2 / 3)  # ML 0.2 is below the catalogue limit
+        self.assertEqual(g["unmatched_in_bbox_ml"]["n"], 2)
+        tab = magnitude_error_by_bin(det, ref, m)
+        self.assertEqual(list(tab["n"]), [1, 1])
+        self.assertAlmostEqual(float(tab["ml_bias"].iloc[1]), 0.3)
+
     def test_pick_metrics(self):
         arr = pd.DataFrame({"event_id": ["a"] * 2, "station": ["XX.A", "XX.B"], "phase": ["P", "P"],
                             "time_s": [10.0, 20.0]})

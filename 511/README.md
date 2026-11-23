@@ -162,13 +162,15 @@ python 511/e2e_fetch.py --region central_italy --bands HN --tag hn   # accelerom
 python 511/e2e_fetch.py --region ridgecrest                # 20 stations, 2 days, SCEDC
 python 511/e2e_run.py --run data/e2e/central_italy --picker phasenet --weights instance --device cuda
 python 511/e2e_run.py --run data/e2e/central_italy --picker stalta
+python 511/e2e_rescore.py    # precision inside the catalogue bbox/min magnitude, magnitude error per bin
 
 python 511/train_magnitude.py --dataset AQ2009GM --epochs 40 --device cuda --out 511/outputs/magnitude/aq2009
 python 511/e2e_run.py --run data/e2e/central_italy --picker phasenet --weights instance --device cuda \
     --magnitude-model 511/outputs/magnitude/aq2009/model.pt
 
-python 511/finetune_picker.py --dataset AQ2009GM --channels HN --weights instance --device cuda \
-    --out 511/outputs/finetune/aq2009_hn
+# AQ2009GM holds no accelerometer (HN) traces; INSTANCE does (large download)
+python 511/finetune_picker.py --dataset InstanceCounts --channels HN --weights instance --device cuda \
+    --out 511/outputs/finetune/instance_hn
 ```
 
 Regions (bounding box, provider, time window, 1-D velocity model, ML coefficients) are in
