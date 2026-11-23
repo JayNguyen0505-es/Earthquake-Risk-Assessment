@@ -9,3 +9,5 @@
 **/.venv*/
 /logs/
 /run_512.sh
+/results_*.zip
+/SUMMARY.md

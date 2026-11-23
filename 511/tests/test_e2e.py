@@ -86,6 +86,24 @@ class EvaluateTests(unittest.TestCase):
         tab = recall_by_magnitude(ref, m)
         self.assertEqual(int(tab["n_detected"].sum()), 1)
 
+    def test_region_precision_and_magnitude_bins(self):
+        from e2e.evaluate import magnitude_error_by_bin, region_metrics
+
+        ref = pd.DataFrame({"event_id": ["a", "b"], "time_s": [0.0, 100.0], "lat": [42.8, 42.9], "lon": [13.1, 13.2],
+                            "depth_km": [10, 10], "mag": [1.2, 2.2]})
+        det = pd.DataFrame({"time_s": [0.2, 100.1, 300.0, 400.0, 500.0], "lat": [42.8, 42.9, 42.7, 44.0, 42.6],
+                            "lon": [13.1, 13.2, 13.3, 11.5, 13.0], "depth_km": [9] * 5,
+                            "ml": [1.0, 2.5, 0.2, 2.0, 1.1]})
+        m = match_events(det, ref)
+        g = region_metrics(det, ref, m, [12.75, 42.35, 13.75, 43.25], minmag=0.5)
+        self.assertEqual(g["n_detected_outside_bbox"], 1)                 # the event at 44.0 N, 11.5 E
+        self.assertAlmostEqual(g["precision_in_bbox"], 2 / 4)
+        self.assertAlmostEqual(g["precision_in_bbox_above_minmag"], 2 / 3)  # ML 0.2 is below the catalogue limit
+        self.assertEqual(g["unmatched_in_bbox_ml"]["n"], 2)
+        tab = magnitude_error_by_bin(det, ref, m)
+        self.assertEqual(list(tab["n"]), [1, 1])
+        self.assertAlmostEqual(float(tab["ml_bias"].iloc[1]), 0.3)
+
     def test_pick_metrics(self):
         arr = pd.DataFrame({"event_id": ["a"] * 2, "station": ["XX.A", "XX.B"], "phase": ["P", "P"],
                             "time_s": [10.0, 20.0]})
@@ -94,6 +112,27 @@ class EvaluateTests(unittest.TestCase):
         m = pick_metrics(picks, arr, {"XX.A", "XX.B"}, tol=0.5)
         self.assertEqual(m["P"]["matched"], 1)
         self.assertAlmostEqual(m["P"]["resid_mean"], 0.1, places=6)
+
+
+class FetchFallbackTests(unittest.TestCase):
+    def test_per_event_arrivals_and_per_station_waveforms(self):
+        from e2e.fake_fdsn import FakeFDSN
+        from e2e.fetch import run_fetch
+
+        region = get_region("central_italy")
+        vm = velocity_model(region)
+        fake = FakeFDSN(region, vm, "2020-01-01T00:00:00", "2020-01-01T01:00:00", n_events=4, seed=3,
+                        reject_search_arrivals=True, bulk_nodata=True)
+        with tempfile.TemporaryDirectory() as d:
+            run_fetch(region, "2020-01-01T00:00:00", "2020-01-01T01:00:00", d, n_stations=6, bands=["HH"],
+                      clients={"INGV": fake})
+            arr = pd.read_csv(Path(d) / "arrivals.csv")
+            self.assertEqual(arr["event_id"].nunique(), 4)                  # arrivals recovered per event
+            self.assertEqual(len(list(Path(d).glob("waveforms/*/*.mseed"))), 6)  # per-station fallback
+            # waveforms-only re-run keeps the station selection and finds nothing left to do
+            run_fetch(region, "2020-01-01T00:00:00", "2020-01-01T01:00:00", d, clients={"INGV": fake},
+                      only="waveforms", retry_missing=True)
+            self.assertEqual(len(pd.read_csv(Path(d) / "stations.csv")), 6)
 
 
 class EndToEndTests(unittest.TestCase):

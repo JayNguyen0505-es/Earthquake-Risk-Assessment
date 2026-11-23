@@ -63,6 +63,61 @@ def event_metrics(det, ref, matches):
     return out
 
 
+def in_bbox(df, bbox):
+    minlon, minlat, maxlon, maxlat = bbox
+    return ((df["lon"] >= minlon) & (df["lon"] <= maxlon) & (df["lat"] >= minlat) & (df["lat"] <= maxlat)).to_numpy()
+
+
+def region_metrics(det, ref, matches, bbox, minmag=None):
+    """Precision over the detections the reference catalogue could contain.
+
+    The agency catalogue is requested for one bbox and a minimum magnitude, while the network also
+    detects events outside the box and below that magnitude, so plain precision is biased low. Here
+    precision counts only detections inside the bbox, and (when an ML is available) with ML at or above
+    the catalogue's minimum magnitude. Unmatched detections inside the box are summarised by ML: if
+    they are mostly small, they are likely real events missing from the agency catalogue.
+    """
+    if det.empty:
+        return {}
+    matched = np.zeros(len(det), dtype=bool)
+    if not matches.empty:
+        matched[matches["det"].to_numpy(int)] = True
+    inside = in_bbox(det, bbox)
+    out = {"bbox": [float(v) for v in bbox], "n_detected_in_bbox": int(inside.sum()),
+           "n_detected_outside_bbox": int((~inside).sum()),
+           "precision_in_bbox": float(matched[inside].sum() / max(inside.sum(), 1))}
+    if minmag is not None and "ml" in det:
+        ml = det["ml"].to_numpy(float)
+        sel = inside & (np.isnan(ml) | (ml >= minmag))
+        out.update({"minmag": float(minmag), "n_detected_in_bbox_above_minmag": int(sel.sum()),
+                    "precision_in_bbox_above_minmag": float(matched[sel].sum() / max(sel.sum(), 1))})
+        for name, m in (("unmatched_in_bbox_ml", inside & ~matched), ("matched_in_bbox_ml", inside & matched)):
+            v = ml[m & ~np.isnan(ml)]
+            if len(v):
+                q = np.quantile(v, [0.1, 0.5, 0.9])
+                out[name] = {"n": int(len(v)), "p10": float(q[0]), "median": float(q[1]), "p90": float(q[2]),
+                             "n_ge_2": int((v >= 2).sum())}
+    return out
+
+
+def magnitude_error_by_bin(det, ref, matches, bins=MAG_BINS):
+    """Bias and spread of ML and DL magnitude against the reference magnitude, per reference-magnitude bin."""
+    if matches.empty:
+        return pd.DataFrame()
+    d = det.iloc[matches["det"].to_numpy(int)].reset_index(drop=True)
+    r = ref.iloc[matches["ref"].to_numpy(int)].reset_index(drop=True)
+    tab = pd.DataFrame({"bin": pd.cut(r["mag"], bins)})
+    cols = [c for c in ("ml", "m_dl") if c in d]
+    for c in cols:
+        tab[c] = d[c].to_numpy(float) - r["mag"].to_numpy(float)
+    g = tab.groupby("bin", observed=True)
+    out = g.size().rename("n").to_frame()
+    for c in cols:
+        out[f"{c}_bias"] = g[c].mean()
+        out[f"{c}_sd"] = g[c].std()
+    return out.reset_index().astype({"bin": str})
+
+
 def recall_by_magnitude(ref, matches, bins=MAG_BINS):
     found = np.zeros(len(ref), dtype=bool)
     if not matches.empty:

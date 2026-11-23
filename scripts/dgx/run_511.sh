@@ -12,7 +12,7 @@
 # Long runs: nohup bash scripts/dgx/run_511.sh all > logs/511_all.log 2>&1 &
 # Settings (environment variables, defaults in brackets):
 #   VENV [.venv-dgx]  DEVICE [cuda if available]  PICKER_DATASETS ["ETHZ"]  PICKER_N [2000]
-#   MAG_DATASET [AQ2009GM]  MAG_CHANNELS [""]  MAG_EPOCHS [40]  FINETUNE_DATASET [AQ2009GM]  FINETUNE_CHANNELS [HN]
+#   MAG_DATASET [AQ2009GM]  MAG_CHANNELS [""]  MAG_EPOCHS [40]  FINETUNE_DATASET [AQ2009GM, which has no HN traces: use InstanceCounts]  FINETUNE_CHANNELS [HN]
 #   REGIONS ["central_italy ridgecrest"]  SEISBENCH_CACHE_ROOT [~/.seisbench]
 set -uo pipefail
 cd "$(dirname "$0")/../.."

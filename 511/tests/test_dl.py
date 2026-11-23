@@ -33,6 +33,18 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(list(m), [True, False, False])  # low Z SNR and dead (NaN) channel both dropped
         self.assertEqual(snr_mask(pd.DataFrame({"x": [1]}), 10.0)[0], None)
 
+    def test_missing_channel_fails_with_available_codes(self):
+        import types
+
+        import pandas as pd
+
+        from dl.data import apply_filters
+
+        ds = types.SimpleNamespace(metadata=pd.DataFrame({"station_channel": ["HH", "EH"]}), filter=lambda *a, **k: None)
+        with self.assertRaises(SystemExit) as cm:
+            apply_filters(ds, channels=["HN"])
+        self.assertIn("EH HH", str(cm.exception))
+
 
 class STALTATests(unittest.TestCase):
     def test_picks_synthetic_arrivals(self):
