@@ -1,8 +1,9 @@
 """Compare an automatic catalogue with the reference (agency) catalogue.
 
-Matching: a detected event and a reference event match if their origin times differ by at most
-``max_dt`` seconds and their epicentres by at most ``max_km``; pairs are assigned greedily by
-time difference so each event is used once. Reported: detection recall (overall and per magnitude
+Matching: a detected event and a reference event are a candidate pair if their origin times differ by
+at most ``max_dt`` seconds and their epicentres by at most ``max_km``. Pairs are assigned one-to-one,
+first maximising the number of matched pairs, then minimising the time difference (linear assignment
+per connected group of candidates). Picks are matched to analyst arrivals the same way. Reported: detection recall (overall and per magnitude
 bin), precision, location errors, magnitude errors, and pick recall/residuals against the analyst
 arrivals on the stations of the network.
 """
@@ -17,6 +18,42 @@ from loc.geometry import to_local_km
 MAG_BINS = [-1, 1, 1.5, 2, 2.5, 3, 4, 10]
 
 
+def one_to_one(i, j, cost):
+    """Indices into the candidate pairs (i[k], j[k]) forming a maximum-cardinality, then minimum-cost,
+    one-to-one matching. cost must lie in [0, 1]."""
+    from scipy.optimize import linear_sum_assignment
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    i, j, cost = np.asarray(i), np.asarray(j), np.asarray(cost, float)
+    if len(i) == 0:
+        return np.array([], dtype=int)
+    _, ii = np.unique(i, return_inverse=True)
+    _, jj = np.unique(j, return_inverse=True)
+    n1, n2 = ii.max() + 1, jj.max() + 1
+    g = coo_matrix((np.ones(len(i)), (ii, n1 + jj)), shape=(n1 + n2, n1 + n2))
+    _, lab = connected_components(g, directed=False)
+    comp = lab[ii]
+    order = np.argsort(comp, kind="stable")
+    bounds = np.flatnonzero(np.diff(comp[order])) + 1
+    keep = []
+    for ks in np.split(order, bounds):
+        if len(ks) == 1:
+            keep.append(int(ks[0]))
+            continue
+        ri, rinv = np.unique(ii[ks], return_inverse=True)
+        ci, cinv = np.unique(jj[ks], return_inverse=True)
+        big = 2.0 * min(len(ri), len(ci)) + 10.0  # any extra valid pair outweighs all costs
+        m = np.full((len(ri), len(ci)), big)
+        idx = np.full((len(ri), len(ci)), -1)
+        m[rinv, cinv] = cost[ks]
+        idx[rinv, cinv] = ks
+        r, c = linear_sum_assignment(m)
+        sel = idx[r, c]
+        keep.extend(int(k) for k in sel[sel >= 0])
+    return np.sort(np.array(keep, dtype=int))
+
+
 def match_events(det, ref, max_dt=3.0, max_km=25.0):
     if det.empty or ref.empty:
         return pd.DataFrame(columns=["det", "ref", "dt_s", "epi_err_km"])
@@ -26,16 +63,14 @@ def match_events(det, ref, max_dt=3.0, max_km=25.0):
     dt = det["time_s"].to_numpy()[:, None] - ref["time_s"].to_numpy()[None, :]
     dist = np.hypot(dx[:, None] - rx[None, :], dy[:, None] - ry[None, :])
     cand = np.argwhere((np.abs(dt) <= max_dt) & (dist <= max_km))
-    order = np.argsort(np.abs(dt[cand[:, 0], cand[:, 1]]))
-    used_d, used_r, rows = set(), set(), []
-    for k in order:
-        i, j = cand[k]
-        if i in used_d or j in used_r:
-            continue
-        used_d.add(i)
-        used_r.add(j)
-        rows.append({"det": int(i), "ref": int(j), "dt_s": float(dt[i, j]), "epi_err_km": float(dist[i, j])})
-    return pd.DataFrame(rows)
+    if not len(cand):
+        return pd.DataFrame(columns=["det", "ref", "dt_s", "epi_err_km"])
+    ci, cj = cand[:, 0], cand[:, 1]
+    cost = 0.999 * np.abs(dt[ci, cj]) / max_dt + 0.001 * dist[ci, cj] / max_km
+    sel = one_to_one(ci, cj, cost)
+    rows = [{"det": int(ci[k]), "ref": int(cj[k]), "dt_s": float(dt[ci[k], cj[k]]),
+             "epi_err_km": float(dist[ci[k], cj[k]])} for k in sel]
+    return pd.DataFrame(rows).sort_values("ref").reset_index(drop=True)
 
 
 def _stats(x):
@@ -136,16 +171,21 @@ def pick_metrics(picks, arrivals, stations, tol=0.5):
         a = arr[arr["phase"] == phase]
         p = picks[picks["phase"] == phase]
         resid = []
-        by_sta = {s: np.sort(g["time"].to_numpy()) for s, g in p.groupby("station")}
-        for _, row in a.iterrows():
-            times = by_sta.get(row["station"])
+        by_sta = {s: np.sort(g["time"].to_numpy(float)) for s, g in p.groupby("station")}
+        for sta, ga in a.groupby("station"):
+            times = by_sta.get(sta)
             if times is None or not len(times):
                 continue
-            k = np.searchsorted(times, row["time_s"])
-            near = [times[i] for i in (k - 1, k) if 0 <= i < len(times)]
-            best = min(near, key=lambda t: abs(t - row["time_s"]))
-            if abs(best - row["time_s"]) <= tol:
-                resid.append(best - row["time_s"])
+            at = ga["time_s"].to_numpy(float)
+            lo = np.searchsorted(times, at - tol, "left")
+            hi = np.searchsorted(times, at + tol, "right")
+            ci = np.repeat(np.arange(len(at)), hi - lo)
+            cj = np.concatenate([np.arange(a0, b0) for a0, b0 in zip(lo, hi)]) if len(at) else np.array([], int)
+            if not len(ci):
+                continue
+            d = times[cj] - at[ci]
+            for k in one_to_one(ci, cj, np.abs(d) / tol):  # each pick explains at most one analyst arrival
+                resid.append(float(d[k]))
         out[phase] = {"n_analyst": int(len(a)), "n_auto": int(len(p)), "matched": len(resid),
                       "recall": len(resid) / max(len(a), 1), **{f"resid_{k}": v for k, v in _stats(resid).items()}}
     return out

@@ -13,13 +13,20 @@ station-level RMSE/MAE/bias/R² and event-level metrics (inverse-variance weight
 station estimates), compared with a data-driven Richter-type baseline
 M = a·log10(A_horizontal) + b·log10(R) + c fitted on the same training traces.
 
+Loss: --loss gaussian (per-trace Gaussian NLL, MagNet style) or --loss event (Gaussian NLL with an
+error shared by all stations of an event, tau learned jointly; batches are whole events). The event
+interval of a model trained with --loss event is sqrt(tau^2 + 1/sum w) instead of sqrt(1/sum w).
+
 Outputs in --out: model.pt (checkpoint used by e2e_run.py --magnitude-model), metrics.json,
-test_predictions.csv, training_history.csv, diagnostic PNGs.
+test_predictions.csv and dev_predictions.csv (one row per trace with event/station metadata, input
+features and the predicted mean/log-variance: the station tables of calibration_study.py),
+split_manifest.csv (event id -> split, to check for overlap), training_history.csv, diagnostic PNGs.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -32,8 +39,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dl.data import (apply_filters, data_unit, earthquake_mask, is_physical_unit, load_dataset,  # noqa: E402
                      snr_mask, split_dataset)
-from dl.magnet import (DEFAULT_PRE, DEFAULT_WINDOW, ScalarScaler, build_model, combine_station_estimates,  # noqa: E402
-                       gaussian_nll, make_generator, scalar_matrix)
+from dl.data import hypocentral_distance_km  # noqa: E402
+from dl.magnet import (DEFAULT_PRE, DEFAULT_WINDOW, EventBatchSampler, ScalarScaler, build_model,  # noqa: E402
+                       combine_station_estimates, event_nll, gaussian_nll, make_generator, scalar_matrix)
 
 
 def regression_metrics(y, yhat):
@@ -60,7 +68,8 @@ def richter_features(amp, logdist):
     return np.column_stack([a_h, np.asarray(logdist, float), np.ones(len(a_h))])
 
 
-def iterate(model, loader, scaler, use_amp, device, optimizer=None, max_batches=None):
+def iterate(model, loader, scaler, use_amp, device, optimizer=None, max_batches=None, log_tau=None):
+    """One pass. With log_tau (a tensor) the loss is event_nll, otherwise the per-trace Gaussian NLL."""
     import torch
 
     train = optimizer is not None
@@ -75,11 +84,14 @@ def iterate(model, loader, scaler, use_amp, device, optimizer=None, max_batches=
         y = batch["y"].to(device)
         with torch.set_grad_enabled(train):
             mu, lv = model(x, st)
-            loss = gaussian_nll(mu, lv, y)
+            if log_tau is not None and train:
+                loss = event_nll(mu, lv, y, batch["eid"].to(device), log_tau)
+            else:
+                loss = gaussian_nll(mu, lv, y)
             if train:
                 optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+                torch.nn.utils.clip_grad_norm_([q for g in optimizer.param_groups for q in g["params"]], 5.0)
                 optimizer.step()
         total += loss.item() * len(y)
         n += len(y)
@@ -87,6 +99,55 @@ def iterate(model, loader, scaler, use_amp, device, optimizer=None, max_batches=
             preds.append(np.column_stack([y.cpu().numpy(), mu.detach().cpu().numpy(), lv.detach().cpu().numpy(),
                                           batch["amp"].numpy(), batch["logdist"].numpy().reshape(-1)]))
     return total / max(n, 1), (np.concatenate(preds) if preds else None)
+
+
+def event_nll_numpy(df, tau):
+    """Exact per-trace event NLL on a whole prediction table (used for early stopping with --loss event)."""
+    from calib.aggregate import shared_error_nll, _event_sums
+
+    t = df.assign(sd=np.exp(0.5 * df["logvar"]))
+    return shared_error_nll([np.log(max(tau, 1e-6)), 0.0], _event_sums(t), fit_bias=False) - 0.5 * np.log(2 * np.pi)
+
+
+def prediction_table(pred, metadata):
+    """Trace-level predictions joined with the event/station metadata of the same (sequential) order."""
+    md = metadata.reset_index(drop=True)
+    t = pd.DataFrame({"m_true": pred[:, 0], "m_pred": pred[:, 1], "logvar": pred[:, 2],
+                      "log_amp_z": pred[:, 3], "log_amp_n": pred[:, 4], "log_amp_e": pred[:, 5], "logdist": pred[:, -1]})
+    col = lambda name, default=np.nan: md[name].to_numpy() if name in md else np.full(len(md), default)  # noqa: E731
+    t["source_id"] = md["source_id"].astype(str).to_numpy() if "source_id" in md else np.arange(len(t)).astype(str)
+    net, sta = col("station_network_code", ""), col("station_code", "")
+    t["station_code"] = [f"{n}.{s}" if n else str(s) for n, s in zip(net, sta)]
+    ch = next((c for c in ("trace_channel", "station_channel") if c in md), None)
+    t["channel"] = md[ch].astype(str).to_numpy() if ch else ""
+    t["trace_name"] = col("trace_name", "")
+    t["source_time"] = col("source_origin_time", "")
+    t["mag_type"] = col("source_magnitude_type", "")
+    for a, b in (("source_lat", "source_latitude_deg"), ("source_lon", "source_longitude_deg"),
+                 ("source_depth_km", "source_depth_km"), ("station_lat", "station_latitude_deg"),
+                 ("station_lon", "station_longitude_deg")):
+        t[a] = pd.to_numeric(pd.Series(col(b)), errors="coerce").to_numpy()
+    t["dist_km"] = [hypocentral_distance_km(r) for r in md.to_dict("records")]
+    if t[["source_lat", "source_lon", "station_lat", "station_lon"]].notna().all(axis=None):
+        from calib.io import azimuth_deg
+
+        t["azimuth"] = azimuth_deg(t["source_lat"], t["source_lon"], t["station_lat"], t["station_lon"])
+    return t
+
+
+def split_manifest(splits):
+    rows = []
+    for name, d in splits.items():
+        md = d.metadata
+        ids = md["source_id"].astype(str) if "source_id" in md else pd.Series(np.arange(len(md)).astype(str))
+        for sid, n in ids.value_counts().items():
+            rows.append({"source_id": sid, "split": name, "n_traces": int(n)})
+    man = pd.DataFrame(rows).sort_values(["split", "source_id"]).reset_index(drop=True)
+    overlap = man.groupby("source_id")["split"].nunique()
+    if (overlap > 1).any():
+        raise SystemExit(f"split leak: {int((overlap > 1).sum())} events in more than one split")
+    digest = hashlib.sha256("\n".join(man["split"] + ":" + man["source_id"]).encode()).hexdigest()[:16]
+    return man, digest
 
 
 def plots(test, events, out):
@@ -141,6 +202,10 @@ def main(argv=None):
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--max-train-batches", type=int)
     p.add_argument("--split-mode", default="event", choices=["event", "dataset"])
+    p.add_argument("--loss", default="gaussian", choices=["gaussian", "event"],
+                   help="per-trace Gaussian NLL, or Gaussian NLL with a learned shared event error tau")
+    p.add_argument("--events-per-batch", type=int, default=32, help="--loss event: events per batch")
+    p.add_argument("--stations-per-event", type=int, default=16, help="--loss event: max traces per event per batch")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
@@ -177,6 +242,12 @@ def main(argv=None):
     splits = split_dataset(ds, mode=a.split_mode, seed=a.seed)
     print(f"{len(ds)} traces ({measurement}, {unit}); amplitude features: {use_amp}; "
           + ", ".join(f"{k} {len(v)}" for k, v in splits.items()))
+    empty = [k for k, v in splits.items() if len(v) == 0]
+    if empty:
+        raise SystemExit(f"empty split(s) {empty}: check the filters (--min-mag, --channels, --min-snr-db)")
+    manifest, split_hash = split_manifest(splits)
+    manifest.to_csv(out / "split_manifest.csv", index=False)
+    print(f"split manifest: {manifest['source_id'].nunique()} events, hash {split_hash}")
 
     gens = {k: make_generator(v, a.window, a.pre) for k, v in splits.items()}
     amp_s, ld_s, y_s = collect_scalars(gens["train"], 20000, a.seed)
@@ -190,27 +261,47 @@ def main(argv=None):
 
     loaders = {k: DataLoader(g, batch_size=a.batch_size, shuffle=(k == "train"), num_workers=a.workers,
                              worker_init_fn=worker_seeding) for k, g in gens.items() if len(g)}
+    if a.loss == "event":
+        ids = splits["train"].metadata["source_id"].astype(str).to_numpy()
+        loaders["train"] = DataLoader(gens["train"], num_workers=a.workers, worker_init_fn=worker_seeding,
+                                      batch_sampler=EventBatchSampler(ids, a.events_per_batch, a.stations_per_event,
+                                                                      shuffle=True, seed=a.seed))
     arch = {"width": a.width, "lstm": a.lstm}
     model = build_model(scaler.mean.shape[0], **arch).to(a.device)
-    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
+    groups = [{"params": list(model.parameters()), "weight_decay": 1e-4}]
+    log_tau = None
+    if a.loss == "event":
+        log_tau = torch.nn.Parameter(torch.tensor(np.log(0.1), dtype=torch.float32, device=a.device))
+        groups.append({"params": [log_tau], "weight_decay": 0.0})
+    opt = torch.optim.AdamW(groups, lr=a.lr)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.5, patience=max(1, a.patience // 2))
     config = {"window": a.window, "pre": a.pre, "use_amplitude": bool(use_amp), "physical_units": bool(physical),
               "measurement": measurement, "unit": unit, "channels": a.channels, "dataset": str(a.dataset),
-              "sampling_rate": 100.0, "component_order": "ZNE", "arch": arch}
+              "sampling_rate": 100.0, "component_order": "ZNE", "arch": arch, "loss": a.loss,
+              "split_hash": split_hash, "min_mag": a.min_mag, "min_snr_db": a.min_snr_db, "mag_types": a.mag_types,
+              "seed": a.seed}
+
+    def tau_value():
+        return float(torch.exp(log_tau).item()) if log_tau is not None else 0.0
 
     def save(path):
         torch.save({"state_dict": model.state_dict(), "config": config, "scaler_mean": scaler.mean,
-                    "scaler_std": scaler.std, "richter_baseline": None if baseline is None else baseline.tolist()}, path)
+                    "scaler_std": scaler.std, "richter_baseline": None if baseline is None else baseline.tolist(),
+                    "tau": tau_value()}, path)
 
     history, best, wait = [], np.inf, 0
     for epoch in range(1, a.epochs + 1):
         t0 = time.time()
-        tr, _ = iterate(model, loaders["train"], scaler, use_amp, a.device, opt, a.max_train_batches)
+        tr, _ = iterate(model, loaders["train"], scaler, use_amp, a.device, opt, a.max_train_batches, log_tau)
         dv, pred = iterate(model, loaders["dev"], scaler, use_amp, a.device) if "dev" in loaders else (tr, None)
         rmse = float(np.sqrt(np.mean((pred[:, 1] - pred[:, 0]) ** 2))) if pred is not None else np.nan
+        if a.loss == "event" and pred is not None:  # early-stop on the exact event NLL of the whole dev set
+            dv = event_nll_numpy(prediction_table(pred, splits["dev"].metadata), tau_value())
         sched.step(dv)
-        history.append({"epoch": epoch, "train_nll": tr, "dev_nll": dv, "dev_rmse": rmse, "seconds": time.time() - t0})
-        print(f"epoch {epoch:3d}  train NLL {tr:.4f}  dev NLL {dv:.4f}  dev RMSE {rmse:.3f}  ({time.time() - t0:.0f} s)")
+        history.append({"epoch": epoch, "train_nll": tr, "dev_nll": dv, "dev_rmse": rmse, "tau": tau_value(),
+                        "seconds": time.time() - t0})
+        print(f"epoch {epoch:3d}  train NLL {tr:.4f}  dev NLL {dv:.4f}  dev RMSE {rmse:.3f}  tau {tau_value():.3f}  "
+              f"({time.time() - t0:.0f} s)")
         if dv < best - 1e-4:
             best, wait = dv, 0
             save(out / "model.pt")
@@ -223,16 +314,16 @@ def main(argv=None):
 
     ck = torch.load(out / "model.pt", map_location=a.device, weights_only=False)
     model.load_state_dict(ck["state_dict"])
-    _, pred = iterate(model, DataLoader(gens["test"], batch_size=a.batch_size, shuffle=False, num_workers=a.workers),
-                      scaler, use_amp, a.device)
-    md_test = splits["test"].metadata.reset_index(drop=True)
-    test = pd.DataFrame({"m_true": pred[:, 0], "m_pred": pred[:, 1], "logvar": pred[:, 2],
-                         "logdist": pred[:, -1]})
-    test["source_id"] = md_test["source_id"].astype(str).to_numpy() if "source_id" in md_test else np.arange(len(test))
-    test["trace_channel"] = md_test.get("trace_channel", pd.Series([""] * len(test))).to_numpy()
-    metrics = {"config": config, "station_dl": regression_metrics(test["m_true"], test["m_pred"])}
+    tau = float(ck.get("tau") or 0.0)
+    tables = {}
+    for name in ("dev", "test"):
+        _, pred = iterate(model, DataLoader(gens[name], batch_size=a.batch_size, shuffle=False, num_workers=a.workers),
+                          scaler, use_amp, a.device)
+        tables[name] = prediction_table(pred, splits[name].metadata)
+    test = tables["test"]
+    metrics = {"config": config, "tau": tau, "station_dl": regression_metrics(test["m_true"], test["m_pred"])}
     if baseline is not None:
-        amp_cols = pred[:, 3:6]
+        amp_cols = test[["log_amp_z", "log_amp_n", "log_amp_e"]].to_numpy()
         ok = np.isfinite(test["logdist"].to_numpy())
         test["m_richter"] = np.nan
         test.loc[ok, "m_richter"] = richter_features(amp_cols[ok], test.loc[ok, "logdist"]) @ baseline
@@ -241,7 +332,7 @@ def main(argv=None):
     for sid, g in test.groupby("source_id"):
         m_w, m_se, m_med = combine_station_estimates(g["m_pred"], g["logvar"])
         row = {"source_id": sid, "n_stations": len(g), "m_true": g["m_true"].iloc[0], "m_pred": m_w, "m_se": m_se,
-               "m_median": m_med}
+               "m_se_shared": float(np.sqrt(tau ** 2 + m_se ** 2)), "m_median": m_med}
         if "m_richter" in g:
             row["m_richter"] = float(np.nanmedian(g["m_richter"]))
         ev_rows.append(row)
@@ -250,6 +341,10 @@ def main(argv=None):
     if "m_richter" in events:
         ok = events["m_richter"].notna()
         metrics["event_richter_baseline"] = regression_metrics(events.loc[ok, "m_true"], events.loc[ok, "m_richter"])
+    r = (events["m_pred"] - events["m_true"]).abs()
+    metrics["event_coverage95_independent"] = float(np.mean(r <= 1.96 * events["m_se"]))
+    metrics["event_coverage95_shared"] = float(np.mean(r <= 1.96 * events["m_se_shared"]))
+    tables["dev"].to_csv(out / "dev_predictions.csv", index=False)
     # calibration of the predicted uncertainty: fraction of |residual| within 1 sigma (ideal 0.68)
     z = np.abs(test["m_pred"] - test["m_true"]) / np.exp(0.5 * test["logvar"])
     metrics["station_within_1sigma"] = float(np.mean(z <= 1.0))

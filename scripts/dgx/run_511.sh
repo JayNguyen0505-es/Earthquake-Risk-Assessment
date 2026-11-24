@@ -14,6 +14,7 @@
 #   VENV [.venv-dgx]  DEVICE [cuda if available]  PICKER_DATASETS ["ETHZ"]  PICKER_N [2000]
 #   MAG_DATASET [AQ2009GM]  MAG_CHANNELS [""]  MAG_EPOCHS [40]  FINETUNE_DATASET [AQ2009GM, which has no HN traces: use InstanceCounts]  FINETUNE_CHANNELS [HN]
 #   REGIONS ["central_italy ridgecrest"]  SEISBENCH_CACHE_ROOT [~/.seisbench]
+#   MAG_MODEL [511/outputs/magnitude/AQ2009GM/model.pt]: DL magnitude checkpoint used by the e2e step
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 VENV="${VENV:-.venv-dgx}"
@@ -91,9 +92,13 @@ do_finetune() {
 
 do_e2e() {
   local mag=()
-  local mm
-  mm=$(ls -t 511/outputs/magnitude/*/model.pt 2>/dev/null | head -1)
-  [ -n "$mm" ] && mag=(--magnitude-model "$mm") && echo "   using DL magnitude model $mm"
+  local mm="${MAG_MODEL:-511/outputs/magnitude/AQ2009GM/model.pt}"
+  if [ -f "$mm" ]; then
+    mag=(--magnitude-model "$mm")
+    echo "   using DL magnitude model $mm (sha256 $(sha256sum "$mm" | cut -c1-16))"
+  else
+    echo "   no DL magnitude model at $mm (set MAG_MODEL); DL magnitude skipped"
+  fi
   for run in data/e2e/*/; do
     [ -f "$run/run.json" ] || continue
     step e2e python 511/e2e_run.py --run "$run" --picker stalta

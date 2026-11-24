@@ -66,12 +66,28 @@ class WaveformStore:
         return st
 
 
-def compute_picks(store, picker, out_csv, p_threshold, s_threshold, pad=60.0, max_hours=None):
+def compute_picks(store, picker, out_csv, p_threshold, s_threshold, pad=60.0, max_hours=None, picker_tag=""):
+    """Hour-by-hour picks, checkpointed to out_csv.
+
+    The checkpoint is only reused if it was written with the same picker and thresholds
+    (picks_config.json next to it); otherwise it is moved aside and recomputed. Only the requested
+    hours are returned, even if the checkpoint holds more.
+    """
     from obspy import UTCDateTime
 
     from dl.pickers import pick_stream
 
     out_csv = Path(out_csv)
+    cfg_path = out_csv.with_name("picks_config.json")
+    config = {"picker": picker_tag or type(picker).__name__, "p_threshold": float(p_threshold),
+              "s_threshold": float(s_threshold), "pad_s": float(pad)}
+    if out_csv.exists():
+        old = json.loads(cfg_path.read_text()) if cfg_path.exists() else None
+        if old != config:
+            stale = out_csv.with_name("picks.stale.csv")
+            print(f"  picks checkpoint was made with {old}, now {config}: moved to {stale.name}, recomputing")
+            out_csv.replace(stale)
+    cfg_path.write_text(json.dumps(config, indent=1))
     done = pd.read_csv(out_csv) if out_csv.exists() else pd.DataFrame()
     done_hours = set(done["hour"].astype(str)) if "hour" in done else set()
     frames = [done] if len(done) else []
@@ -93,13 +109,16 @@ def compute_picks(store, picker, out_csv, p_threshold, s_threshold, pad=60.0, ma
         pd.concat(frames, ignore_index=True).to_csv(out_csv, index=False)  # checkpoint after every hour
         print(f"  picks {key}: {len(df)} ({(df['phase'] == 'P').sum()} P, {(df['phase'] == 'S').sum()} S) "
               f"[{i + 1}/{len(hours)}, {time.time() - t0:.0f} s]")
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(
-        columns=["station", "network", "phase", "time", "time_s", "prob", "trace_id", "hour"])
+    cols = ["station", "network", "phase", "time", "time_s", "prob", "trace_id", "hour"]
+    if not frames:
+        return pd.DataFrame(columns=cols)
+    allp = pd.concat(frames, ignore_index=True)
+    return allp[allp["hour"].astype(str).isin(set(hours))].reset_index(drop=True)
 
 
 def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_threshold=0.3, assoc_tol=1.5,
                  min_p=4, min_total=5, bootstrap=0, magnitude_predictor=None, compute_ml=True, max_hours=None,
-                 match_dt=3.0, match_km=25.0):
+                 match_dt=3.0, match_km=25.0, picker_tag=""):
     from obspy import UTCDateTime, read_inventory
 
     run_dir, out_dir = Path(run_dir), Path(out_dir)
@@ -110,7 +129,8 @@ def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_th
     tt = TravelTimeTable(vmodel, max_dist_km=600.0)
 
     # 1. picks
-    picks = compute_picks(store, picker, out_dir / "picks.csv", p_threshold, s_threshold, max_hours=max_hours)
+    picks = compute_picks(store, picker, out_dir / "picks.csv", p_threshold, s_threshold, max_hours=max_hours,
+                          picker_tag=picker_tag)
     print(f"{len(picks)} picks on {picks['station'].nunique() if len(picks) else 0} stations")
     pk = picks.drop(columns=["time"], errors="ignore").rename(columns={"time_s": "time"})
     pk = pk[["station", "phase", "time", "prob"]].astype({"time": float}).copy()
@@ -128,7 +148,7 @@ def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_th
     sx, sy = to_local_km(stations["lat"].to_numpy(), stations["lon"].to_numpy(), lat0, lon0)
     st_tab = stations.assign(x_km=sx, y_km=sy).set_index("station")
     coeffs = {k: region["ml"][k] for k in ("a", "b", "c")} if "ml" in region else {}
-    rows, ev_picks = [], []
+    rows, ev_picks, sta_rows = [], [], []
     for k, ev in enumerate(events):
         sub = pk_out.loc[ev["pick_ids"]]
         try:
@@ -143,11 +163,13 @@ def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_th
         evd = {"origin_time_utc": UTCDateTime(loc.origin_time), "x_km": float(x), "y_km": float(y),
                "depth_km": loc.depth_km}
         if compute_ml and inventory is not None and coeffs:
-            ml, ml_sd, n_ml, _ = event_local_magnitude(store.span, inventory, st_tab, evd, sub, tt, coeffs)
+            ml, ml_sd, n_ml, srows = event_local_magnitude(store.span, inventory, st_tab, evd, sub, tt, coeffs)
             row.update({"ml": ml, "ml_sd": ml_sd, "n_ml": n_ml})
+            sta_rows += [dict(r, event_id=row["event_id"], time=loc.origin_time) for r in srows]
         if magnitude_predictor is not None:
-            m, se, n = event_dl_magnitude(magnitude_predictor, store.span, inventory, st_tab, evd, sub)
+            m, se, n, srows = event_dl_magnitude(magnitude_predictor, store.span, inventory, st_tab, evd, sub)
             row.update({"m_dl": m, "m_dl_se": se, "n_dl": n})
+            sta_rows += [dict(r, event_id=row["event_id"], time=loc.origin_time) for r in srows]
         rows.append(row)
         ev_picks.append(sub.assign(event_id=row["event_id"]))
         if (k + 1) % 50 == 0:
@@ -156,6 +178,9 @@ def run_pipeline(run_dir, out_dir, region, vmodel, picker, p_threshold=0.3, s_th
     det.to_csv(out_dir / "catalog.csv", index=False)
     if ev_picks:
         pd.concat(ev_picks).to_csv(out_dir / "event_picks.csv", index=False)
+    if sta_rows:  # station-level magnitudes: the input of calibration_study.py (labelled via matches.csv)
+        pd.DataFrame(sta_rows).assign(loc_source="auto", p_source="auto").to_csv(
+            out_dir / "station_magnitudes.csv", index=False)
 
     # 5. evaluation against the reference catalogue
     metrics = {"run_dir": str(run_dir), "region": region.get("id"), "n_picks": int(len(picks)),
