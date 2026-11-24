@@ -1,0 +1,14 @@
+| model | region | k | mode | n | scheme | const_mondrian_bc | shared_conf | relative_gain |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| AQ2009GM_gauss | central_italy | 2 | random | 30 | target_only | 1.18718 | 1.10938 | 0.0655332 |
+| AQ2009GM_gauss | central_italy | 3 | random | 30 | target_only | 1.16357 | 1.10567 | 0.0497545 |
+| AQ2009GM_gauss | central_italy | all | all | 30 | target_only | 1.10641 | 1.04982 | 0.0511425 |
+| AQ2009GM_gauss | central_italy_hn | 2 | random | 30 | target_only | 1.5007 | 1.42458 | 0.0507231 |
+| AQ2009GM_gauss | central_italy_hn | 3 | random | 30 | target_only | 1.31271 | 1.29056 | 0.0168685 |
+| AQ2009GM_gauss | central_italy_hn | all | all | 30 | target_only | 1.21501 | 1.15455 | 0.049757 |
+| AQ2009GM_gauss | marche_2022 | 2 | random | 30 | target_only | 1.50589 | 1.24791 | 0.171314 |
+| AQ2009GM_gauss | marche_2022 | 3 | random | 30 | target_only | 1.42421 | 1.07391 | 0.245961 |
+| AQ2009GM_gauss | marche_2022 | all | all | 30 | target_only | 1.40491 | 0.968462 | 0.310659 |
+| AQ2009GM_gauss | ridgecrest | 2 | random | 30 | target_only | 1.50305 | 1.34623 | 0.104334 |
+| AQ2009GM_gauss | ridgecrest | 3 | random | 30 | target_only | 1.45999 | 1.24751 | 0.145535 |
+| AQ2009GM_gauss | ridgecrest | all | all | 30 | target_only | 1.3091 | 1.16372 | 0.111055 |

@@ -53,3 +53,15 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
   baseline (const_mondrian_bc) by ~3-12% interval score at k=2-3, ties at k=all. One global factor
   (naive_conf_bc) over-covers at small k and under-covers (78-85%) at k=all. Pooling source+target fails.
   Framing: evaluation + k-dependence + local-data curve (~20-30 events); method gain modest.
+- 2026-11-24 OpenQuake cannot import on DGX (fiona/GDAL has no aarch64 wheel, no sudo): run 512/magnitude_to_shaking.py on the Mac
+  (.venv-mac has OpenQuake) on events.csv.gz pulled from DGX. In-domain test: calibration changes PGA-exceedance Brier by ~0.001
+  (BSSA14 sigma dominates); the downstream effect is expected only under transfer bias (N=0 vs N=30 runs, run_phase_f.sh).
+- Running on DGX (tmux era): train (run_paper.sh train: AQ2009GM gauss then event), instancegm (download, slow),
+  final (scripts/dgx/run_final.sh, waits for train), phase_f (scripts/dgx/run_phase_f.sh, waits for final AQ part).
+  Watch: /tmp/era_watch.sh on the Mac.
+- 2026-11-24 FINAL AQ2009GM_gauss (511/outputs/calibration_final on Mac+DGX): in-domain naive cov95 53% at k=all,
+  shared/const_mondrian ~95%. Transfer N=0 fails (2-82%). target_only N>=20 -> ~93-96%; shared_conf beats
+  const_mondrian_bc interval score by 6-17% at k=2 in all 4 regions, ties at k=all. BSSA14 (Ms=5, 0.1 g, k=all):
+  central Italy missed-hazard 9-11% at N=0 -> ~0.1% with 30 local events, Brier 0.169 -> 0.122 (floor 0.112);
+  method choice after calibration barely matters; Marche fewshot30 slightly WORSE (early-sequence bias not stationary).
+- 2026-11-24 Phase G complete for the Mac snapshot: `.venv-mac/bin/python results/make_tables.py` generates 17 CSV/Markdown pairs and four figures, verified with `-W error` and pyflakes. Vietnamese `results/REPORT.md` records the checkpoint rerun, event-loss regression and worse Marche few-shot Brier. At N=30 and random k=2, shared_conf improves interval score by 5.1–17.1% across the four target sets. InstanceGM is marked “đang chạy” because its outputs are absent on Mac.

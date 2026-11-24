@@ -19,7 +19,9 @@ while [ "$(avail_gb)" -lt "$MIN_FREE_GB" ]; do
 done
 echo "$(date '+%F %T') start ($(avail_gb) GB free): $*" >> "$log"
 export OMP_NUM_THREADS="$THREADS" MKL_NUM_THREADS="$THREADS" OPENBLAS_NUM_THREADS="$THREADS" NUMEXPR_MAX_THREADS="$THREADS"
-setsid nice -n 10 ionice -c3 "$@" >> "$log" 2>&1 &
+lock=()
+case "$*" in *train_magnitude.py*|*finetune_picker.py*) lock=(flock logs/gpu.lock) ;; esac  # one GPU training at a time
+setsid "${lock[@]}" nice -n 10 ionice -c3 "$@" >> "$log" 2>&1 &
 pid=$!
 echo "$pid" > "logs/$name.pid"
 status=""
