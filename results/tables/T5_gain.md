@@ -12,3 +12,9 @@
 | AQ2009GM_gauss | ridgecrest | 2 | random | 30 | target_only | 1.50305 | 1.34623 | 0.104334 |
 | AQ2009GM_gauss | ridgecrest | 3 | random | 30 | target_only | 1.45999 | 1.24751 | 0.145535 |
 | AQ2009GM_gauss | ridgecrest | all | all | 30 | target_only | 1.3091 | 1.16372 | 0.111055 |
+| InstanceGM_gauss | marche_2022 | 2 | random | 30 | target_only | 1.98243 | 1.90457 | 0.0392727 |
+| InstanceGM_gauss | marche_2022 | 3 | random | 30 | target_only | 1.74881 | 1.70412 | 0.0255586 |
+| InstanceGM_gauss | marche_2022 | all | all | 30 | target_only | 1.36569 | 1.4318 | -0.0484073 |
+| InstanceGM_gauss | ridgecrest | 2 | random | 30 | target_only | 1.64572 | 1.74364 | -0.0594984 |
+| InstanceGM_gauss | ridgecrest | 3 | random | 30 | target_only | 1.5805 | 1.58469 | -0.00265254 |
+| InstanceGM_gauss | ridgecrest | all | all | 30 | target_only | 1.59031 | 1.51044 | 0.0502195 |

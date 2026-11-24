@@ -9,6 +9,11 @@
 | AQ2009GM_gauss | central_italy_hn | transfer | ML | 706 | 11295 | 47.793 | events.csv.gz (all, naive) |
 | AQ2009GM_gauss | marche_2022 | transfer | ML | 293 | 5682 | 41.2146 | events.csv.gz (all, naive) |
 | AQ2009GM_gauss | ridgecrest | transfer | ML | 1442 | 25239 | 47.9714 | events.csv.gz (all, naive) |
+| InstanceGM_gauss | marche_2022 | fewshot30 | ML | 263 | 5112 | 40.4418 | events.csv.gz (all, naive) |
+| InstanceGM_gauss | ridgecrest | fewshot30 | ML | 1412 | 24729 | 46.7991 | events.csv.gz (all, naive) |
+| InstanceGM_gauss | InstanceGM | indomain | ML | 5426 | 115630 | — | metrics.json |
+| InstanceGM_gauss | marche_2022 | transfer | ML | 293 | 5682 | 41.2146 | events.csv.gz (all, naive) |
+| InstanceGM_gauss | ridgecrest | transfer | ML | 1442 | 25239 | 47.9714 | events.csv.gz (all, naive) |
 | ml | central_italy | temporal | ML | 353 | 6707 | 21.6322 | events.csv.gz (all, naive) |
 | ml | central_italy_hn | temporal | ML | 353 | 5648 | 21.6322 | events.csv.gz (all, naive) |
 | ml | marche_2022 | temporal | ML | 147 | 2909 | 27.6028 | events.csv.gz (all, naive) |

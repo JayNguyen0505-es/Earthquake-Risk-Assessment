@@ -2,7 +2,7 @@
 
 ## Tóm tắt
 
-Báo cáo đo độ tin cậy của khoảng dự đoán độ lớn địa phương khi giảm số trạm hoặc đem mô hình sang một vùng mới. Trên AQ2009GM cùng miền, khoảng danh định 95% theo giả định trạm độc lập chỉ bao phủ 52,9% sự kiện khi dùng toàn bộ trạm, còn hiệu chuẩn có thành phần sai số chung đạt 94,2%. Khi chuyển vùng và chưa dùng sự kiện địa phương, độ phủ của phương pháp sai số chung kết hợp conformal chỉ đạt 10,6–76,8% với toàn bộ trạm. Với 30 sự kiện địa phương và giữ ngẫu nhiên 2 trạm, phương pháp này giảm điểm phạt của khoảng dự đoán 5,1–17,1% so với baseline độ rộng cố định theo số trạm. Trong mô phỏng rung lắc ở Central Italy, tỷ lệ bỏ sót nguy cơ giảm từ 9,60% xuống 0,06% sau hiệu chuẩn địa phương, còn điểm Brier tại Marche tăng.
+Khi xem sai số giữa các trạm là độc lập, khoảng dự đoán danh định 95% chỉ bao phủ 52,9% sự kiện của AQ2009GM và 50,3% của InstanceGM khi dùng toàn bộ trạm cùng miền. Mức quá tự tin tăng theo số trạm, còn thiên lệch khi chuyển vùng vẫn hiện diện ở InstanceGM dù mô hình được huấn luyện trên bộ dữ liệu lớn hơn. Đường cong hiệu chuẩn địa phương cho thấy khoảng 20–30 sự kiện đầu đã giúp phục hồi phần lớn độ phủ trong nhiều cấu hình mạng thưa. Marche vẫn thiếu độ phủ, phù hợp với khả năng sai số thay đổi theo thời gian trong chuỗi. So với baseline đã hiệu chỉnh thiên lệch và có độ rộng riêng theo số trạm, lợi ích bổ sung của thành phần sai số chung nhỏ và phụ thuộc vào mô hình. [T3_indomain.md](tables/T3_indomain.md) · [T4_transfer.md](tables/T4_transfer.md) · [T5_curve.md](tables/T5_curve.md) · [T5_gain.md](tables/T5_gain.md)
 
 ## Câu hỏi nghiên cứu
 
@@ -28,9 +28,13 @@ Nhãn tham chiếu là độ lớn địa phương ML từ danh mục động đ
 
 Mỗi dòng trạm là một bản ghi của một sự kiện tại một trạm. Số liệu được đếm từ các hàng dùng toàn bộ trạm trong tập kiểm thử. Các tập kiểm thử sau khi dành sự kiện cho hiệu chuẩn few-shot cũng có trong bảng. [T1_data.md](tables/T1_data.md)
 
-### InstanceGM — đang chạy
+### InstanceGM
 
-Bản sao trên Mac chưa có kết quả InstanceGM. Các nhận định bên dưới dựa trên AQ2009GM và ML cổ điển.
+InstanceGM_gauss được huấn luyện trên bộ dữ liệu lớn hơn và được đánh giá cùng miền, rồi chuyển sang Marche và Ridgecrest. Tập kiểm thử của mô hình có 5.426 sự kiện theo bảng huấn luyện. Bảng hiệu chuẩn cùng miền có 5.293 sự kiện khi dùng toàn bộ trạm. Hai bảng dùng số đếm từ các đầu ra khác nhau, nên tỷ lệ độ phủ dưới đây lấy theo bảng hiệu chuẩn. [T1_data.md](tables/T1_data.md) · [T9_training.md](tables/T9_training.md) · [T3_indomain.md](tables/T3_indomain.md)
+
+Cùng miền, độ phủ của `naive` giảm từ 87,9% ở k = 2 xuống 50,3% khi dùng toàn bộ trạm. Ở cấu hình toàn bộ trạm, `shared_conf` đạt 94,0% và baseline Mondrian đạt 94,8%. Khi chuyển vùng với toàn bộ trạm và chưa hiệu chuẩn địa phương, dự đoán của `shared_conf` cao hơn độ lớn tham chiếu trung bình 0,24 ở Ridgecrest và 0,20 ở Marche. Với AQ2009GM trong cùng phép so sánh, chênh lệch tương ứng là 0,25 và 0,23. [T3_indomain.md](tables/T3_indomain.md) · [T4_transfer.md](tables/T4_transfer.md)
+
+Với N = 30 và k = 2 chọn ngẫu nhiên, điểm khoảng của `shared_conf` và baseline Mondrian lần lượt là 1,744 và 1,646 ở Ridgecrest, và 1,905 và 1,982 ở Marche. Khi dùng toàn bộ trạm, thứ tự hai phương pháp đảo chiều ở cả hai vùng. Kết quả này cho thấy lợi ích của sai số chung phụ thuộc vào mô hình, vùng và số trạm. [T5_gain.md](tables/T5_gain.md)
 
 ## Phương pháp
 
@@ -51,7 +55,7 @@ Khi hiệu chuẩn trên phần đầu của từng chuỗi và dùng toàn bộ
 
 ### C. Hàm mất mát khi huấn luyện
 
-Gaussian và event loss lần lượt cho RMSE độ lớn theo sự kiện là 0,173 và 0,423 trên tập kiểm thử, với RMSE tập phát triển ở epoch cuối là 0,189 và 0,470. Event loss học τ = 0,416 và đạt độ phủ 95,4% khi dùng phương sai chung. Trong lượt huấn luyện này, độ phủ cao đi kèm dự đoán điểm kém, nên phần đánh giá chuyển vùng bên dưới sử dụng mô hình Gaussian. [T9_training.md](tables/T9_training.md) · [T9_history.md](tables/T9_history.md)
+Gaussian và event loss lần lượt cho RMSE độ lớn theo sự kiện là 0,173 và 0,423 trên tập kiểm thử, với RMSE tập phát triển ở epoch cuối là 0,189 và 0,470. Event loss học τ = 0,416 và đạt độ phủ 95,4% khi dùng phương sai chung, nhưng R² của dự đoán điểm trên tập kiểm thử giảm từ 0,834 xuống khoảng 0,001. Với một nhãn độ lớn cho mỗi sự kiện, việc học đồng thời sai số chung và giá trị trung tâm có thể khó tách hai thành phần. Kết quả phù hợp với khả năng dự đoán trung tâm kém đi trong khi τ làm rộng khoảng. Các phân tích chuyển vùng giữ mô hình Gaussian và ước lượng τ sau huấn luyện trên tập hiệu chuẩn. [T9_training.md](tables/T9_training.md) · [T9_history.md](tables/T9_history.md)
 
 ### D. Hiệu chuẩn cùng miền và hình học mạng trạm
 
@@ -59,7 +63,7 @@ Trên AQ2009GM, `naive` giảm độ phủ từ 91,0% ở k = 2 xuống 52,9% �
 
 ### E. Chuyển vùng và số sự kiện cần để hiệu chuẩn
 
-Không có sự kiện địa phương, `shared_conf` dùng toàn bộ trạm đạt độ phủ 10,6% ở Central Italy, 32,3% ở cấu hình HN, 76,8% ở Marche và 65,3% ở Ridgecrest. Với N = 30 và k = 2, độ phủ trung bình của phương pháp này lên 93,4–96,5%, với điểm khoảng thấp hơn baseline 5,1–17,1%. Bảng `n_needed` lấy N nhỏ nhất đạt ngưỡng của phép thử sau khi gộp các kiểu bớt trạm. Với `shared_conf`, mốc này là 10–20 sự kiện tại k = 2 và 20–200 sự kiện khi dùng toàn bộ trạm, tùy tập đích. Vì vậy, mốc hữu ích cho mạng thưa trong các chuỗi đã thử có thể thay đổi khi đổi vùng hoặc số trạm. [T4_transfer.md](tables/T4_transfer.md) · [T5_curve.md](tables/T5_curve.md) · [T5_gain.md](tables/T5_gain.md) · [T5_n_needed.md](tables/T5_n_needed.md) · [F2_local_data.png](figures/F2_local_data.png)
+Không có sự kiện địa phương, `shared_conf` dùng toàn bộ trạm đạt độ phủ 10,6% ở Central Italy, 32,3% ở cấu hình HN, 76,8% ở Marche và 65,3% ở Ridgecrest. Với N = 30 và k = 2, độ phủ trung bình của phương pháp này lên 93,4–96,5%, với điểm khoảng thấp hơn baseline 5,1–17,1%. Bảng `n_needed` lấy N nhỏ nhất đạt ngưỡng của phép thử sau khi gộp các kiểu bớt trạm. Với `shared_conf`, mốc này là 10–20 sự kiện tại k = 2 và 20–200 sự kiện khi dùng toàn bộ trạm, tùy tập đích. Ở InstanceGM với k = 2 chọn ngẫu nhiên, độ phủ trung bình tại Ridgecrest tăng từ 77,8% khi N = 0 lên 93,4% khi N = 20. Tại Marche, với toàn bộ trạm, độ phủ chỉ đạt 89,3–91,2% tại các mốc N = 30, 50 và 100. Kết quả phù hợp với khả năng chuỗi Marche không dừng, tức sai số ở phần đầu có thể thiếu tính đại diện cho phần kiểm thử về sau. Vì vậy, khoảng 20–30 sự kiện là mốc thực nghiệm cho nhiều cấu hình mạng thưa và mức phục hồi còn tùy vùng, số trạm và thời điểm chọn mẫu. [T4_transfer.md](tables/T4_transfer.md) · [T5_curve.md](tables/T5_curve.md) · [T5_gain.md](tables/T5_gain.md) · [T5_n_needed.md](tables/T5_n_needed.md) · [F2_local_data.png](figures/F2_local_data.png)
 
 ### F. Kiểm tra hệ quả đối với rung lắc
 
@@ -68,19 +72,23 @@ Trong kịch bản Mₛ = 5, ngưỡng PGA 0,1 g và dùng toàn bộ trạm, `s
 ## Kết quả âm và sửa sai
 
 - **Checkpoint.** Độ dốc cũ xấp xỉ 0,3 là do chọn nhầm checkpoint M1.5 trong lần chạy cũ. Chạy lại cùng cấu hình tự động tái hiện con số đó ở cả hai vùng. Checkpoint đầy đủ vẫn cho độ dốc thấp hơn mức lý tưởng và có thiên lệch âm. [T2_checkpoint.md](tables/T2_checkpoint.md)
-- **Event loss.** Độ phủ cao của khoảng có thành phần sai số chung đi kèm RMSE lớn hơn hẳn. Cần kiểm tra chất lượng dự đoán điểm cùng với độ phủ khi đánh giá hàm mất mát. [T9_training.md](tables/T9_training.md)
+- **Event loss.** Đưa τ vào hàm mất mát làm tăng sai số dự đoán điểm dù độ phủ đạt gần mức danh định. Kết quả ủng hộ việc ước lượng τ sau huấn luyện trong quy trình đã thử. [T9_training.md](tables/T9_training.md)
 - **Marche few-shot.** Sau khi hiệu chuẩn bằng 30 sự kiện đầu, điểm Brier của `shared_conf` tăng từ 0,130 lên 0,143, dù tỷ lệ bỏ sót nguy cơ giảm. Biến động thiên lệch trong chuỗi là một cách giải thích cần được kiểm tra trên cùng tập kiểm thử. [T8_bssa14.md](tables/T8_bssa14.md)
 
 ## Hạn chế
 
-Nhãn ML của danh mục có sai số và có thể lệch theo vùng. Các chuỗi kiểm thử chuyển vùng chỉ kéo dài khoảng 41–48 giờ, số vùng ít, và hai cấu hình Central Italy cùng đại diện cho một vùng địa lý. BSSA14 được dùng ở đây để ngoại suy trong mô phỏng, với độ lớn danh mục ML khác thang độ lớn mô men Mw mà mô hình rung lắc sử dụng. Kết quả phụ thuộc vào mô hình DL tự cài và hiện chưa có đối chứng InstanceGM trong bản sao kết quả. [T1_data.md](tables/T1_data.md) · [T8_bssa14.md](tables/T8_bssa14.md)
+Nhãn ML của danh mục có sai số và có thể lệch theo vùng. Các chuỗi kiểm thử chuyển vùng chỉ kéo dài khoảng 41–48 giờ, số vùng ít, và hai cấu hình Central Italy cùng đại diện cho một vùng địa lý. BSSA14 được dùng ở đây để ngoại suy trong mô phỏng, với độ lớn danh mục ML khác thang độ lớn mô men Mw mà mô hình rung lắc sử dụng. Đối chứng chuyển vùng của InstanceGM hiện giới hạn ở Marche và Ridgecrest. So sánh với AQ2009GM thay đổi cả tập huấn luyện, nên chưa tách được tác động riêng của quy mô dữ liệu. [T1_data.md](tables/T1_data.md) · [T8_bssa14.md](tables/T8_bssa14.md)
+
+## Kết luận
+
+Kết quả vững nhất là phép đo mức quá tự tin của khoảng dự đoán khi giả định các trạm độc lập và mức thay đổi của độ phủ theo k. Hai mô hình học sâu cùng cho thấy khoảng danh định 95% chỉ chứa xấp xỉ một nửa số nhãn cùng miền khi dùng toàn bộ trạm. Thiên lệch tại Marche và Ridgecrest vẫn hiện diện khi chuyển sang mô hình huấn luyện trên bộ dữ liệu lớn hơn. Đường cong theo N định lượng mức phục hồi độ phủ với khoảng 20–30 sự kiện địa phương trong nhiều cấu hình mạng thưa. Độ phủ còn thấp ở Marche cho thấy cần xét khả năng sai số thay đổi trong chuỗi khi hiệu chuẩn trên phần đầu. [T3_indomain.md](tables/T3_indomain.md) · [T4_transfer.md](tables/T4_transfer.md) · [T5_curve.md](tables/T5_curve.md)
 
 ## Đánh giá khả năng công bố
 
-Đóng góp chính là định lượng mức quá tự tin khi thay đổi số trạm và đo số sự kiện địa phương cần để phục hồi độ phủ. Lợi ích của phương pháp ở k = 2 là khiêm tốn và thay đổi giữa các tập đích, với mức giảm điểm khoảng 5,1–17,1% so với một baseline mạnh tại N = 30. Kết quả phù hợp với một bài đánh giá thực nghiệm tập trung cho *Seismological Research Letters*, sau khi kiểm tra thêm độ lặp lại trên chuỗi và mô hình độc lập. [T5_gain.md](tables/T5_gain.md) · [Hướng dẫn tác giả của SRL](https://www.seismosoc.org/publications/srl-authorsinfo-2/)
+Kết quả có cơ sở để phát triển thành bài đánh giá thực nghiệm về độ tin cậy khi thay đổi số trạm và chuyển vùng. Các phát hiện lặp lại giữa hai mô hình và đường cong hiệu chuẩn địa phương là trọng tâm của bài. Lợi ích bổ sung của sai số chung so với baseline theo k nhìn chung nhỏ và phụ thuộc vào mô hình. Cụ thể, tại N = 30 và k = 2, mức giảm điểm khoảng của AQ2009GM là 5,1–17,1% trên các tập đích đã thử, còn với InstanceGM, điểm giảm 3,9% ở Marche và tăng 5,9% ở Ridgecrest. Kết quả âm của event loss làm rõ giới hạn của việc học sai số chung trong lúc huấn luyện. Kiểm tra trên các chuỗi độc lập dài hơn và ước lượng độ bất định của chênh lệch điểm khoảng sẽ củng cố phạm vi kết luận. [T5_gain.md](tables/T5_gain.md) · [T7_gain.md](tables/T7_gain.md) · [T9_training.md](tables/T9_training.md)
 
 ## Việc tiếp theo
 
-- Bổ sung InstanceGM và lặp lại so sánh trên chuỗi dài hơn ở các vùng độc lập.
+- Mở rộng đối chứng InstanceGM sang các vùng và chuỗi độc lập dài hơn.
 - Đo khoảng tin cậy cho chênh lệch điểm khoảng giữa các phương pháp trên cùng sự kiện. Kiểm tra độ ổn định của đường cong khi đổi mốc thời gian chia chuỗi.
 - So sánh lại BSSA14 trên cùng tập sự kiện giữ lại ở cả hai chế độ hiệu chuẩn. Dùng tập con có cả ML và Mw để kiểm tra ảnh hưởng của thang độ lớn.

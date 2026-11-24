@@ -19,17 +19,17 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
 - Disk budget: 350 GB new data. Free at start: 1014 GB. ~/.seisbench already 146 GB (aq2009gm, ethz).
 
 ## Phase status
-- [ ] 0 setup (repo synced, links made; venv, tmux, InstanceGM size check pending)
-- [ ] A ablation: why DL magnitude shrinks (slope 0.3) - needs 511/e2e_magnitudes.py
-- [ ] B data: InstanceGM (if fits), Marche 2022, ML+Mw subset
-- [ ] C models: AQ2009GM gauss/event, InstanceGM gauss/event, GBM on amplitude features, WA ML + station terms, TEAM-LM (time-boxed)
-- [ ] D e2e reruns -> station_magnitudes.csv
-- [ ] E calibration study + local-data curve + bootstrap CIs
-- [ ] F BSSA14 exceedance (OpenQuake)
-- [ ] G results/REPORT.md
+- [x] 0 setup (repo synced, links made; venv, tmux, InstanceGM size check pending)
+- [x] A ablation: why DL magnitude shrinks (slope 0.3) - needs 511/e2e_magnitudes.py
+- [x] B data: InstanceGM (if fits), Marche 2022, ML+Mw subset
+- [x] C models: AQ2009GM gauss/event, InstanceGM gauss/event, GBM on amplitude features, WA ML + station terms, TEAM-LM (time-boxed)
+- [x] D e2e reruns -> station_magnitudes.csv
+- [x] E calibration study + local-data curve + bootstrap CIs
+- [x] F BSSA14 exceedance (OpenQuake)
+- [x] G results/REPORT.md
 
 ## Running jobs (DGX)
-(none)
+(none: all queues finished 2026-11-25; tmux era has idle windows only)
 
 ## Results so far
 - Phase F tooling ready in `512/magnitude_to_shaking.py` (OpenQuake 3.26.2). All 20 tests and pyflakes on both new files pass in `.venv-mac`. Both modes produced all four outputs on the AQ2009 Phase E pilot (90 transplant and 30 observed summary rows for k=3/all and three methods). A synthetic CLI run verified that infinite and NaN widths are dropped and counted.
@@ -65,3 +65,13 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
   central Italy missed-hazard 9-11% at N=0 -> ~0.1% with 30 local events, Brier 0.169 -> 0.122 (floor 0.112);
   method choice after calibration barely matters; Marche fewshot30 slightly WORSE (early-sequence bias not stationary).
 - 2026-11-24 Phase G complete for the Mac snapshot: `.venv-mac/bin/python results/make_tables.py` generates 17 CSV/Markdown pairs and four figures, verified with `-W error` and pyflakes. Vietnamese `results/REPORT.md` records the checkpoint rerun, event-loss regression and worse Marche few-shot Brier. At N=30 and random k=2, shared_conf improves interval score by 5.1–17.1% across the four target sets. InstanceGM is marked “đang chạy” because its outputs are absent on Mac.
+- 2026-11-25 InstanceGM_gauss (30 epochs, dev RMSE 0.200): in-domain naive cov95 50% at k=all, shared/const_mondrian ~95%.
+  Transfer bias +0.24 (Ridgecrest), +0.22 (Marche): more training data does NOT remove regional bias.
+  Local-data curve: shared_conf does NOT beat const_mondrian_bc consistently with this model (Ridgecrest k=2 N=30:
+  1.74 vs 1.66, worse; Marche k=2: 1.90 vs 1.98, better; k=all mixed). Marche coverage stays 0.89-0.92 even with
+  N=30-100 (non-stationary sequence). => method gain is model-dependent and small; the robust contributions are the
+  overconfidence measurement, the k-dependence, the regional-bias finding and the N~20-30 local-data curve.
+- AQ2009GM_event (training-time shared-error loss): dev RMSE 0.47 vs 0.19, tau 0.42 -> negative result (event-level
+  error unidentifiable from event-level labels; mean predictions drift). Post-hoc tau is the method to keep.
+- 2026-11-25: Reran `python3 results/make_tables.py` successfully with InstanceGM_gauss and AQ2009GM_event present. InstanceGM in-domain coverage uses the calibration subset in T3_indomain. T1_data falls back to the metrics.json count because the full-station event rows do not match the reported test-event count.
+- Updated `results/REPORT.md` and added the one-page Vietnamese lay summary `results/SUMMARY_VI.md`. The report now treats the shared-error gain as small and model-dependent, records the event-loss regression, and centers the publication assessment on measured overconfidence, station-count dependence, persistent transfer bias and the local calibration curve with the Marche non-stationarity caveat.

@@ -8,6 +8,11 @@ AQ2009GM_gauss,central_italy,transfer,ML,706,13414,47.79298055556085,"events.csv
 AQ2009GM_gauss,central_italy_hn,transfer,ML,706,11295,47.79298055556085,"events.csv.gz (all, naive)"
 AQ2009GM_gauss,marche_2022,transfer,ML,293,5682,41.21456944445769,"events.csv.gz (all, naive)"
 AQ2009GM_gauss,ridgecrest,transfer,ML,1442,25239,47.97144444445769,"events.csv.gz (all, naive)"
+InstanceGM_gauss,marche_2022,fewshot30,ML,263,5112,40.44179166667991,"events.csv.gz (all, naive)"
+InstanceGM_gauss,ridgecrest,fewshot30,ML,1412,24729,46.79913611107403,"events.csv.gz (all, naive)"
+InstanceGM_gauss,InstanceGM,indomain,ML,5426,115630,,metrics.json
+InstanceGM_gauss,marche_2022,transfer,ML,293,5682,41.21456944445769,"events.csv.gz (all, naive)"
+InstanceGM_gauss,ridgecrest,transfer,ML,1442,25239,47.97144444445769,"events.csv.gz (all, naive)"
 ml,central_italy,temporal,ML,353,6707,21.63222499999735,"events.csv.gz (all, naive)"
 ml,central_italy_hn,temporal,ML,353,5648,21.63222499999735,"events.csv.gz (all, naive)"
 ml,marche_2022,temporal,ML,147,2909,27.602830555637677,"events.csv.gz (all, naive)"
