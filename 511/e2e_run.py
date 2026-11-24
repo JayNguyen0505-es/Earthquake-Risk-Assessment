@@ -15,7 +15,9 @@ Steps: picks (hour by hour, checkpointed) -> REAL-style association on sliding w
 and optional DL magnitude -> matching with the reference catalogue.
 
 Output (default 511/outputs/e2e/<run>/<picker>_<weights>/): picks.csv, catalog.csv, event_picks.csv,
-matches.csv, recall_by_magnitude.csv, metrics.json, map.png, errors.png.
+matches.csv, recall_by_magnitude.csv, station_magnitudes.csv (per-station ML / DL magnitudes, for
+calibration_study.py), metrics.json, map.png, errors.png. picks.csv is reused only if picks_config.json
+shows the same picker and thresholds.
 """
 
 from __future__ import annotations
@@ -72,7 +74,7 @@ def main(argv=None):
     print(f"[{region['id']}] {meta['start']} -> {meta['end']}, {meta['n_stations']} stations, picker {tag}")
     det, metrics = run_pipeline(run_dir, out, region, vmodel, picker, a.p_threshold, a.s_threshold, a.assoc_tol,
                                 a.min_p, a.min_total, a.bootstrap, predictor, not a.no_ml, a.max_hours,
-                                a.match_dt, a.match_km)
+                                a.match_dt, a.match_km, picker_tag=tag.replace("_dlmag", ""))
     metrics["args"] = vars(a)
     (out / "metrics.json").write_text(json.dumps(metrics, indent=2, default=str))
     print(summarize(metrics))

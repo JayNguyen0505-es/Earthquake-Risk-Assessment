@@ -61,6 +61,62 @@ def gaussian_nll(mu, logvar, y):
     return (0.5 * (torch.exp(-logvar) * (y - mu) ** 2 + logvar)).mean()
 
 
+def event_nll(mu, logvar, y, event_idx, log_tau):
+    """Gaussian NLL with an error shared by all stations of an event (mean per station).
+
+    Residuals of one event r = y - mu have covariance tau^2 11' + diag(exp(logvar)). With tau -> 0 this
+    is gaussian_nll; with tau > 0 the network is no longer pushed to explain the event-level error with
+    small per-station variances, and tau is learned jointly. Closed form via Sherman-Morrison.
+    """
+    import torch
+
+    r = y - mu
+    w = torch.exp(-logvar)
+    uniq, inv = torch.unique(event_idx, return_inverse=True)
+    z = torch.zeros(len(uniq), dtype=mu.dtype, device=mu.device)
+    A = z.index_add(0, inv, w)
+    B = z.index_add(0, inv, w * r)
+    C = z.index_add(0, inv, w * r * r)
+    L = z.index_add(0, inv, logvar)
+    tau2 = torch.exp(2 * log_tau)
+    quad = C - tau2 * B * B / (1 + tau2 * A)
+    logdet = L + torch.log1p(tau2 * A)
+    return 0.5 * (quad + logdet).sum() / len(mu)
+
+
+class EventBatchSampler:
+    """Batches made of whole events: ``events_per_batch`` events, at most ``max_stations`` traces each.
+
+    Needed by event_nll, which only sees the shared error when several stations of one event are in
+    the same batch. ``groups`` is the event id of every sample (positional, as in the generator).
+    """
+
+    def __init__(self, groups, events_per_batch=32, max_stations=16, shuffle=True, seed=0):
+        import pandas as pd
+
+        codes, _ = pd.factorize(pd.Series(groups).astype(str))
+        order = np.argsort(codes, kind="stable")
+        bounds = np.flatnonzero(np.diff(codes[order])) + 1
+        self.events = [g for g in np.split(order, bounds) if len(g)]
+        self.epb, self.max_st, self.shuffle = events_per_batch, max_stations, shuffle
+        self.rng = np.random.default_rng(seed)
+
+    def __iter__(self):
+        ev = list(self.events)
+        if self.shuffle:
+            self.rng.shuffle(ev)
+        for i in range(0, len(ev), self.epb):
+            batch = []
+            for g in ev[i:i + self.epb]:
+                if self.max_st and len(g) > self.max_st:
+                    g = self.rng.choice(g, self.max_st, replace=False) if self.shuffle else g[:self.max_st]
+                batch.extend(int(j) for j in g)
+            yield batch
+
+    def __len__(self):
+        return (len(self.events) + self.epb - 1) // self.epb
+
+
 # ---- SeisBench generator augmentations (callables on the state dict) ---------------------------------
 class AmplitudeAndDistance:
     """Store log10 peak amplitude per component and log10 hypocentral distance before normalisation."""
@@ -78,6 +134,17 @@ class AmplitudeAndDistance:
         state_dict["logdist"] = (np.array([np.log10(r) if np.isfinite(r) else np.nan], dtype=np.float32), None)
 
 
+class EventCode:
+    """Integer event index per sample (for event_nll), from a {source_id: int} mapping."""
+
+    def __init__(self, mapping, column="source_id"):
+        self.mapping, self.column = mapping, column
+
+    def __call__(self, state_dict):
+        _, meta = state_dict["X"]
+        state_dict["eid"] = (np.array(self.mapping.get(str(meta.get(self.column)), -1), dtype=np.int64), None)
+
+
 class MagnitudeLabel:
     def __init__(self, column="source_magnitude"):
         self.column = column
@@ -90,6 +157,8 @@ class MagnitudeLabel:
 def make_generator(dataset, window=DEFAULT_WINDOW, pre=DEFAULT_PRE, p_column="trace_p_arrival_sample"):
     import seisbench.generate as sbg
 
+    ids = dataset.metadata["source_id"].astype(str) if "source_id" in dataset.metadata else None
+    mapping = {} if ids is None else {sid: i for i, sid in enumerate(ids.unique())}
     gen = sbg.GenericGenerator(dataset)
     gen.add_augmentations([
         sbg.WindowAroundSample([p_column], samples_before=pre, windowlen=window, selection="first", strategy="pad"),
@@ -97,6 +166,7 @@ def make_generator(dataset, window=DEFAULT_WINDOW, pre=DEFAULT_PRE, p_column="tr
         sbg.Normalize(demean_axis=-1, amp_norm_axis=-1, amp_norm_type="peak"),
         sbg.ChangeDtype(np.float32),
         MagnitudeLabel(),
+        EventCode(mapping),
     ])
     return gen
 
@@ -125,12 +195,17 @@ class ScalarScaler:
         return np.nan_to_num(z, nan=0.0).astype(np.float32)  # missing distance -> training mean
 
 
-def combine_station_estimates(mu, logvar):
-    """Inverse-variance weighted event magnitude and its standard error from station estimates."""
+def combine_station_estimates(mu, logvar, tau=0.0):
+    """Inverse-variance weighted event magnitude, its standard error and the station median.
+
+    tau = 0 treats stations as independent (the standard error then shrinks like 1/sqrt(n), which is
+    overconfident because station errors of one event are correlated). Pass the shared-error tau
+    learned with --loss event (or fitted by calibration_study.py) to get sqrt(tau^2 + 1/sum w).
+    """
     mu, var = np.asarray(mu, float), np.exp(np.asarray(logvar, float))
     w = 1.0 / var
     m = float(np.sum(w * mu) / np.sum(w))
-    return m, float(np.sqrt(1.0 / np.sum(w))), float(np.median(mu))
+    return m, float(np.sqrt(tau ** 2 + 1.0 / np.sum(w))), float(np.median(mu))
 
 
 # ---- inference on raw obspy data (used by the end-to-end pipeline) ------------------------------------
@@ -147,6 +222,7 @@ class MagnitudePredictor:
         self.model.load_state_dict(ck["state_dict"])
         self.model.to(device).eval()
         self.device = device
+        self.tau = float(ck.get("tau") or 0.0)  # shared event error learned with --loss event
 
     @property
     def response_output(self):
@@ -186,4 +262,5 @@ class MagnitudePredictor:
         with torch.no_grad():
             mu, lv = self.model(torch.from_numpy(x.astype(np.float32)).to(self.device),
                                 torch.from_numpy(s).to(self.device))
+        self.last_features = np.column_stack([amp, logd])  # for train/deployment feature-shift checks
         return mu.cpu().numpy(), lv.cpu().numpy()
