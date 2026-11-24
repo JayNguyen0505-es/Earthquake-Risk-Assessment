@@ -32,6 +32,7 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
 (none)
 
 ## Results so far
+- Phase F tooling ready in `512/magnitude_to_shaking.py` (OpenQuake 3.26.2). All 20 tests and pyflakes on both new files pass in `.venv-mac`. Both modes produced all four outputs on the AQ2009 Phase E pilot (90 transplant and 30 observed summary rows for k=3/all and three methods). A synthetic CLI run verified that infinite and NaN widths are dropped and counted.
 - Phase E tooling ready: default k=2/3/5/10/all, event bootstrap CIs, calibration-only station terms, and the parallel local-data curve. All 44 tests and pyflakes pass in `.venv-mac`; a 50k-event group with 1,000 bootstrap draws took 0.75 s. Real-data Phase E runs are pending.
 - phase A code ready: `511/e2e_magnitudes.py`, `511/ablation_summary.py`, `511/tests/test_e2e_magnitudes.py`, tests pass (.venv-mac unittest discovery and pyflakes).
 - Export 2026-11-23: DL coverage95 naive 51% in-domain, 8-26% e2e; DL slope 0.29-0.38 e2e vs WA ML ~1.
