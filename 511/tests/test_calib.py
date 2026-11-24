@@ -4,6 +4,7 @@
 """
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,10 +14,12 @@ import pandas as pd
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
-from calib.aggregate import fit_shared_error, intraclass_correlation  # noqa: E402
+from calib.aggregate import apply_station_terms, fit_shared_error, fit_station_terms, intraclass_correlation  # noqa: E402
 from calib.conformal import adaptive_conformal, conformal_quantile  # noqa: E402
+from calib.metrics import bootstrap_summary  # noqa: E402
 from calib.study import run_study, split_by_time  # noqa: E402
 from e2e.evaluate import match_events, one_to_one  # noqa: E402
+from local_data_curve import main as local_data_curve  # noqa: E402
 
 
 def synthetic_table(n_events=600, tau=0.2, sd=0.15, scale=1.0, bias=0.0, seed=0):
@@ -55,9 +58,57 @@ class SharedErrorTests(unittest.TestCase):
     def test_classical_ml_without_sd(self):
         t = synthetic_table(tau=0.15, sd=0.2).assign(sd=np.nan, estimator="ml")
         cal, test = split_by_time(t, 0.5)
-        ev, info = run_study(cal, test, ks=(3, "all"), n_rep=1)
+        ev, info = run_study(cal, test, ks=(2, "all"), modes=("random", "one_sided"), n_rep=1)
         self.assertFalse(info["has_station_sd"])
         self.assertAlmostEqual(info["shared_error_model"]["tau"], 0.15, delta=0.03)
+        pairs = ev[(ev["k"] == "2") & (ev["method"] == "naive")]
+        self.assertEqual(set(pairs["mode"]), {"random", "one_sided"})
+        self.assertTrue((pairs["n_sta"] == 2).all())
+        self.assertTrue(np.isfinite(pairs[["lo", "hi"]]).all().all())
+
+    def test_station_terms_remove_injected_offset(self):
+        table = synthetic_table(n_events=100, tau=0, scale=0)
+        table["m_pred"] += 0.6 * (table["station"] == "s0")
+        terms = fit_station_terms(table)
+        self.assertAlmostEqual(terms["s0"], 0.6 * 100 / 105)
+        test = table.iloc[:2].copy()
+        test.loc[test.index[1], "station"] = "unseen"
+        corrected = apply_station_terms(test, terms)
+        self.assertAlmostEqual(corrected.iloc[0]["m_pred"] - corrected.iloc[0]["m_true"], 0.6 * 5 / 105)
+        self.assertEqual(corrected.iloc[1]["m_pred"], test.iloc[1]["m_pred"])
+
+
+class PhaseETests(unittest.TestCase):
+    def test_bootstrap_resamples_events(self):
+        events = synthetic_table(n_events=100).groupby("event_id").head(1)
+        events = events.assign(method="synthetic", lo=events["m_pred"] - 0.15, hi=events["m_pred"] + 0.15)
+        expected_coverage = events["m_true"].between(events["lo"], events["hi"]).mean()
+        # Repeating the first event's rows must leave every event's weight unchanged.
+        events = pd.concat([events, *([events.iloc[:1]] * 100)], ignore_index=True)
+        ci = bootstrap_summary(events, ("method",), n_boot=500).iloc[0]
+        self.assertAlmostEqual(ci["coverage"], expected_coverage)
+        for metric in ("coverage", "mean_width", "interval_score"):
+            self.assertLessEqual(ci[f"{metric}_lo"], ci[metric] + 1e-12)
+            self.assertLessEqual(ci[metric], ci[f"{metric}_hi"] + 1e-12)
+
+    def test_local_curve_improves_target_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, target, out = root / "source.csv", root / "target.csv", root / "curve"
+            synthetic_table(n_events=120, tau=0.08, seed=9).to_csv(source, index=False)
+            synthetic_table(n_events=220, tau=0.28, bias=0.3, seed=11).to_csv(target, index=False)
+            local_data_curve([
+                "--source", str(source), "--target", str(target), "--estimator", "dl", "--out", str(out),
+                "--ns", "0", "50", "999", "--reps", "2", "--ks", "3", "all", "--modes", "random", "--workers", "2",
+            ])
+            curve = pd.read_csv(out / "curve.csv")
+            self.assertEqual(set(curve["n"]), {0, 50})
+            shared = curve[(curve["method"] == "shared_conf") & (curve["k"] == "all")]
+            coverage = shared.set_index("scheme")["coverage_mean"]
+            self.assertGreater(coverage["target_only"], coverage["source_only"])
+            self.assertEqual(set(pd.read_csv(out / "curve_raw.csv")["rep"]), {0, 1})
+            self.assertTrue((out / "n_needed.csv").is_file())
+            self.assertGreater((out / "curve.png").stat().st_size, 0)
 
 
 class ConformalTests(unittest.TestCase):

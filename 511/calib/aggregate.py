@@ -26,6 +26,19 @@ import pandas as pd
 LOG2PI = float(np.log(2 * np.pi))
 
 
+def fit_station_terms(cal_table, shrink=5.0):
+    """Estimate station residual offsets with shrinkage toward zero."""
+    residual = cal_table["m_pred"] - cal_table["m_true"]
+    stats = residual.groupby(cal_table["station"]).agg(["sum", "count"])
+    stats = stats[stats["count"] > 0]
+    return (stats["sum"] / (stats["count"] + shrink)).to_dict()
+
+
+def apply_station_terms(table, terms):
+    """Subtract fitted offsets, leaving unseen stations uncorrected."""
+    return table.assign(m_pred=table["m_pred"] - table["station"].map(terms).fillna(0.0))
+
+
 def station_sd(df):
     """Per-row sd; rows without one (classical ML) get 1.0, i.e. equal weights."""
     sd = pd.to_numeric(df["sd"], errors="coerce") if "sd" in df else pd.Series(np.nan, index=df.index)

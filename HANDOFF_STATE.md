@@ -32,6 +32,7 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
 (none)
 
 ## Results so far
+- Phase E tooling ready: default k=2/3/5/10/all, event bootstrap CIs, calibration-only station terms, and the parallel local-data curve. All 44 tests and pyflakes pass in `.venv-mac`; a 50k-event group with 1,000 bootstrap draws took 0.75 s. Real-data Phase E runs are pending.
 - phase A code ready: `511/e2e_magnitudes.py`, `511/ablation_summary.py`, `511/tests/test_e2e_magnitudes.py`, tests pass (.venv-mac unittest discovery and pyflakes).
 - Export 2026-11-23: DL coverage95 naive 51% in-domain, 8-26% e2e; DL slope 0.29-0.38 e2e vs WA ML ~1.
 - AQ2009 pilot (calibration_study --temporal-split 0.66): shared+conformal ~96-97% at every k;
