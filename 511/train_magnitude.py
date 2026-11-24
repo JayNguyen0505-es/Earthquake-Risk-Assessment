@@ -105,7 +105,7 @@ def event_nll_numpy(df, tau):
     """Exact per-trace event NLL on a whole prediction table (used for early stopping with --loss event)."""
     from calib.aggregate import shared_error_nll, _event_sums
 
-    t = df.assign(sd=np.exp(0.5 * df["logvar"]))
+    t = df.assign(sd=np.exp(0.5 * df["logvar"]), event_id=df["source_id"].astype(str))
     return shared_error_nll([np.log(max(tau, 1e-6)), 0.0], _event_sums(t), fit_bias=False) - 0.5 * np.log(2 * np.pi)
 
 
