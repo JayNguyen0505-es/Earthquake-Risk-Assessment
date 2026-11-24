@@ -41,3 +41,14 @@ after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
 ## Next actions
 1. Finish phase 0; start AQ2009GM training (gauss, then event) on DGX.
 2. Run the phase A ablations on the reference datasets and compare the event and feature-shift summaries.
+- 2026-11-24 phase A (old AQ2009GM checkpoint, all stations <=300 km): DL slope 0.70-0.87 with constant bias
+  (central_italy -0.50, ridgecrest -0.24); WA ML slope 0.86-0.92, bias -0.03 / +0.20; HN ML biased +0.5 for
+  small events (accelerometer noise floor). The old e2e slope 0.3 likely came from the AQ2009GM_M1.5_snr10
+  checkpoint picked by `ls -t` (log shows it was used once). Verification run: 511/outputs/ablation/m15.
+  Location (ref vs auto) and P source (analyst/theory vs auto) change DL error by < 0.04: NOT the cause.
+- 2026-11-24 prelim phase E (old checkpoint, ML-label events, 511/outputs/calibration_prelim3 on Mac):
+  transfer with N=0 local events fails for every method (regional bias). With N>=20 target events
+  (target_only) all bias-corrected methods reach ~93-96%. Shared-error (tau) beats the per-k fixed-width
+  baseline (const_mondrian_bc) by ~3-12% interval score at k=2-3, ties at k=all. One global factor
+  (naive_conf_bc) over-covers at small k and under-covers (78-85%) at k=all. Pooling source+target fails.
+  Framing: evaluation + k-dependence + local-data curve (~20-30 events); method gain modest.

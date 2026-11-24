@@ -6,6 +6,10 @@ Methods (alpha = 0.05 unless set):
                     mean +- 1.96 std/sqrt(n) for classical ML (stations independent)
     naive_conf      naive interval rescaled by ONE conformal factor (global recalibration baseline)
     const_conf      fixed half-width = conformal quantile of |m_hat - m_true| (ignores k and sigmas)
+    naive_conf_bc   naive_conf after removing the calibration-set mean bias (fair baseline under transfer)
+    const_conf_bc   const_conf after removing the calibration-set mean bias
+    const_mondrian_bc  bias-removed fixed half-width estimated separately for each k (needs >= 20
+                    calibration events per k, else the pooled width): the non-parametric k-aware baseline
     shared_gauss    shared-error model fitted by maximum likelihood: (m - b) +- 1.96 sqrt(tau^2 + s^2/sum w)
     shared_conf     shared-error variance, conformal factor pooled over k
     shared_mondrian shared-error variance, conformal factor per k (conditional coverage per k)
@@ -25,7 +29,8 @@ from .aggregate import SharedErrorModel, fit_shared_error, intraclass_correlatio
 from .conformal import MondrianQuantiles, adaptive_conformal, conformal_quantile
 from .dropout import events_from_table, subsets
 
-METHODS = ["naive", "naive_conf", "const_conf", "shared_gauss", "shared_conf", "shared_mondrian"]
+METHODS = ["naive", "naive_conf", "const_conf", "naive_conf_bc", "const_conf_bc", "const_mondrian_bc", "shared_gauss", "shared_conf",
+           "shared_mondrian"]
 
 
 def _has_sd(table):
@@ -63,6 +68,10 @@ def run_study(cal, test, ks=(3, 5, 10, "all"), modes=("random",), n_rep=3, alpha
     q_naive = conformal_quantile(c_naive, alpha)
     q_const = conformal_quantile(np.abs(c["m_naive"] - c["m_true"]), alpha)
     q_shared = conformal_quantile(c_shared, alpha)
+    b_c = float(np.mean(c["m_naive"] - c["m_true"]))  # mean event-level bias on calibration subsets
+    q_naive_bc = conformal_quantile(np.abs(c["m_naive"] - b_c - c["m_true"]) / np.sqrt(c["v_naive"]), alpha)
+    q_const_bc = conformal_quantile(np.abs(c["m_naive"] - b_c - c["m_true"]), alpha)
+    mond_const = MondrianQuantiles(alpha, 20).fit(np.abs(c["m_naive"] - b_c - c["m_true"]), c["k"])
     mond = MondrianQuantiles(alpha, min_group).fit(c_shared, c["k"])
 
     out = []
@@ -75,6 +84,9 @@ def run_study(cal, test, ks=(3, 5, 10, "all"), modes=("random",), n_rep=3, alpha
     add("naive", t["m_naive"], z * sn)
     add("naive_conf", t["m_naive"], q_naive * sn)
     add("const_conf", t["m_naive"], np.full(len(t), q_const))
+    add("naive_conf_bc", t["m_naive"] - b_c, q_naive_bc * sn)
+    add("const_conf_bc", t["m_naive"] - b_c, np.full(len(t), q_const_bc))
+    add("const_mondrian_bc", t["m_naive"] - b_c, mond_const.quantile(t["k"]))
     add("shared_gauss", t["m_shared"], z * ss)
     add("shared_conf", t["m_shared"], q_shared * ss)
     add("shared_mondrian", t["m_shared"], mond.quantile(t["k"]) * ss)
@@ -88,7 +100,8 @@ def run_study(cal, test, ks=(3, 5, 10, "all"), modes=("random",), n_rep=3, alpha
         add("shared_aci", t["m_shared"], half)
     events = pd.concat(out, ignore_index=True)
     info = {"has_station_sd": bool(has_sd), "shared_error_model": model.to_dict(), "alpha": alpha,
-            "q_naive_conf": q_naive, "q_const_conf": q_const, "q_shared_conf": q_shared,
+            "q_naive_conf": q_naive, "q_const_conf": q_const, "q_shared_conf": q_shared, "bias_calibration": b_c,
+            "q_naive_conf_bc": q_naive_bc, "q_const_conf_bc": q_const_bc,
             "q_shared_mondrian": {str(k): v for k, v in mond.by_group.items()},
             "icc_calibration": intraclass_correlation(cal), "icc_test": intraclass_correlation(test),
             "n_cal_events": len(cal_ev), "n_test_events": len(test_ev),
