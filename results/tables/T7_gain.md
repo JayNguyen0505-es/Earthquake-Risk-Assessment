@@ -1,0 +1,11 @@
+| model | region | k | mode | n | scheme | const_mondrian_bc | shared_conf | relative_gain |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ml | central_italy_hn | 2 | random | 30 | target_only | 2.42583 | 2.41093 | 0.00614238 |
+| ml | central_italy_hn | 3 | random | 30 | target_only | 1.97672 | 1.85116 | 0.0635222 |
+| ml | central_italy_hn | all | all | 30 | target_only | 1.62282 | 1.44415 | 0.110098 |
+| ml | marche_2022 | 2 | random | 30 | target_only | 1.99449 | 2.15907 | -0.0825147 |
+| ml | marche_2022 | 3 | random | 30 | target_only | 2.07292 | 2.31677 | -0.117638 |
+| ml | marche_2022 | all | all | 30 | target_only | 1.62275 | 1.67446 | -0.0318692 |
+| ml | ridgecrest | 2 | random | 30 | target_only | 1.90347 | 1.7796 | 0.0650794 |
+| ml | ridgecrest | 3 | random | 30 | target_only | 1.6055 | 1.50228 | 0.0642869 |
+| ml | ridgecrest | all | all | 30 | target_only | 1.57031 | 1.26838 | 0.192274 |

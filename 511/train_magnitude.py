@@ -105,7 +105,7 @@ def event_nll_numpy(df, tau):
     """Exact per-trace event NLL on a whole prediction table (used for early stopping with --loss event)."""
     from calib.aggregate import shared_error_nll, _event_sums
 
-    t = df.assign(sd=np.exp(0.5 * df["logvar"]))
+    t = df.assign(sd=np.exp(0.5 * df["logvar"]), event_id=df["source_id"].astype(str))
     return shared_error_nll([np.log(max(tau, 1e-6)), 0.0], _event_sums(t), fit_bias=False) - 0.5 * np.log(2 * np.pi)
 
 
@@ -216,7 +216,12 @@ def main(argv=None):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     ds = load_dataset(a.dataset, sampling_rate=100.0)
-    apply_filters(ds, channels=a.channels, require=["source_magnitude", "trace_p_arrival_sample"])
+    from dl.data import P_COLUMNS
+
+    p_col = next((c for c in P_COLUMNS if c in ds.metadata.columns), None)
+    if p_col is None:
+        raise SystemExit(f"no P arrival column; looked for {P_COLUMNS}")
+    apply_filters(ds, channels=a.channels, require=["source_magnitude", p_col])
     md = ds.metadata
     mask = earthquake_mask(md) & (md["source_magnitude"].astype(float) >= a.min_mag).to_numpy()
     if a.mag_types and "source_magnitude_type" in md.columns:
@@ -249,7 +254,7 @@ def main(argv=None):
     manifest.to_csv(out / "split_manifest.csv", index=False)
     print(f"split manifest: {manifest['source_id'].nunique()} events, hash {split_hash}")
 
-    gens = {k: make_generator(v, a.window, a.pre) for k, v in splits.items()}
+    gens = {k: make_generator(v, a.window, a.pre, p_column=p_col) for k, v in splits.items()}
     amp_s, ld_s, y_s = collect_scalars(gens["train"], 20000, a.seed)
     scaler = ScalarScaler().fit(scalar_matrix(amp_s, ld_s, use_amp))
     baseline = None
@@ -279,7 +284,7 @@ def main(argv=None):
               "measurement": measurement, "unit": unit, "channels": a.channels, "dataset": str(a.dataset),
               "sampling_rate": 100.0, "component_order": "ZNE", "arch": arch, "loss": a.loss,
               "split_hash": split_hash, "min_mag": a.min_mag, "min_snr_db": a.min_snr_db, "mag_types": a.mag_types,
-              "seed": a.seed}
+              "seed": a.seed, "p_column": p_col}
 
     def tau_value():
         return float(torch.exp(log_tau).item()) if log_tau is not None else 0.0

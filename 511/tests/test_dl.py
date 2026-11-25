@@ -120,6 +120,19 @@ class DatasetTests(unittest.TestCase):
             model = load_picker("phasenet", str(Path(d) / "best"))
             self.assertEqual(model.in_samples, 3001)
 
+    def test_magnitude_event_loss(self):
+        import train_magnitude
+
+        with tempfile.TemporaryDirectory() as d:
+            train_magnitude.main(["--dataset", str(self.path), "--epochs", "1", "--loss", "event",
+                                  "--events-per-batch", "4", "--stations-per-event", "4", "--workers", "0",
+                                  "--device", "cpu", "--width", "8", "--lstm", "8", "--out", d])
+            m = json.loads((Path(d) / "metrics.json").read_text())
+            self.assertGreater(m["tau"], 0.0)
+            self.assertIn("event_coverage95_shared", m)
+            for f in ("dev_predictions.csv", "test_predictions.csv", "split_manifest.csv"):
+                self.assertTrue((Path(d) / f).exists(), f)
+
     def test_magnitude_training_and_predictor(self):
         import train_magnitude
         from dl.magnet import MagnitudePredictor

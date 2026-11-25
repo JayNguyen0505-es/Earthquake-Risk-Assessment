@@ -11,3 +11,9 @@
 /run_512.sh
 /results_*.zip
 /SUMMARY.md
+.venv-mac/
+.venv/
+logs/
+data/
+results/**/*.csv.gz
+*.pt

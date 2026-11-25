@@ -48,7 +48,7 @@ do_e2e() {
       [ -f "$mm" ] || { echo "   skip $loss: $mm missing"; continue; }
       local out="$E2E_ROOT/$r/phasenet_instance_${loss}"
       local old
-      for old in "511/outputs/e2e/$r/phasenet_instance_dlmag/picks.csv" "511/outputs/e2e/$r/phasenet_instance/picks.csv" \
+      for old in "511/outputs/e2e_old/$r/phasenet_instance_dlmag/picks.csv" "511/outputs/e2e/$r/phasenet_instance_dlmag/picks.csv" "511/outputs/e2e/$r/phasenet_instance/picks.csv" \
                  "$E2E_ROOT/$r/phasenet_instance_gauss/picks.csv"; do
         if [ ! -f "$out/picks.csv" ] && [ -f "$old" ]; then
           mkdir -p "$out"

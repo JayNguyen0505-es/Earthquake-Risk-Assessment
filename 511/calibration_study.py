@@ -16,7 +16,7 @@
     python 511/calibration_study.py --cal ITALY --test RIDGECREST --few-shot 50 [--target-only] --adaptive ...
 
 A spec is a train_magnitude.py predictions CSV, an e2e output folder, or a ready station table.
-Outputs: summary.csv (per method), summary_by_k.csv (per method, k, dropout mode), info.json
+Outputs: summary.csv (per method), summary_by_k.csv and summary_by_k_ci.csv (per method, k, dropout mode), info.json
 (fitted tau / scale / bias, conformal factors, ICC), events.csv.gz, coverage_width_vs_k.png.
 """
 
@@ -31,8 +31,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from calib.aggregate import apply_station_terms, fit_station_terms  # noqa: E402
 from calib.io import load_table  # noqa: E402
-from calib.metrics import summarize  # noqa: E402
+from calib.metrics import bootstrap_summary, summarize  # noqa: E402
 from calib.study import first_n_events, run_study, split_by_time  # noqa: E402
 
 
@@ -74,9 +75,11 @@ def main(argv=None):
     p.add_argument("--estimator", help="keep only this estimator (dl or ml) from e2e tables")
     p.add_argument("--few-shot", type=int, help="move the first N test events (time order) into calibration")
     p.add_argument("--target-only", action="store_true", help="with --few-shot: calibrate on those N events only")
-    p.add_argument("--ks", nargs="+", default=["3", "5", "10", "all"])
+    p.add_argument("--ks", nargs="+", type=_k, default=[2, 3, 5, 10, "all"])
     p.add_argument("--modes", nargs="+", default=["random", "one_sided"], choices=["random", "one_sided"])
     p.add_argument("--n-rep", type=int, default=3, help="random subsets per event and k")
+    p.add_argument("--n-boot", type=int, default=500, help="event bootstrap replicates")
+    p.add_argument("--station-terms", action="store_true", help="correct station offsets fitted on calibration events")
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--no-bias", action="store_true", help="do not fit a global offset")
     p.add_argument("--adaptive", action="store_true", help="add adaptive conformal along the test sequence")
@@ -84,6 +87,8 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True)
     a = p.parse_args(argv)
+    if a.n_boot < 1:
+        p.error("--n-boot must be positive")
 
     cal = pd.concat([load_table(s, a.estimator) for s in a.cal], ignore_index=True)
     if a.test:
@@ -99,8 +104,10 @@ def main(argv=None):
     if "one_sided" in modes and not (cal["azimuth"].notna().all() and test["azimuth"].notna().all()):
         print("note: azimuths missing, one-sided dropout skipped")
         modes = [m for m in modes if m != "one_sided"] or ["random"]
-    ks = [_k(k) for k in a.ks]
-    events, info = run_study(cal, test, ks, modes, a.n_rep, a.alpha, a.seed, fit_bias=not a.no_bias,
+    terms = fit_station_terms(cal) if a.station_terms else {}
+    if a.station_terms:
+        cal, test = apply_station_terms(cal, terms), apply_station_terms(test, terms)
+    events, info = run_study(cal, test, a.ks, modes, a.n_rep, a.alpha, a.seed, fit_bias=not a.no_bias,
                              adaptive=a.adaptive, aci_gamma=a.aci_gamma)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -108,8 +115,11 @@ def main(argv=None):
     by_k = summarize(events, ("method", "k", "mode"), a.alpha)
     summary.to_csv(out / "summary.csv", index=False)
     by_k.to_csv(out / "summary_by_k.csv", index=False)
+    bootstrap_summary(events, ("method", "k", "mode"), a.alpha, a.n_boot, a.seed).to_csv(
+        out / "summary_by_k_ci.csv", index=False)
     events.to_csv(out / "events.csv.gz", index=False)
     info["args"] = vars(a)
+    info["n_corrected_stations"] = len(terms)
     (out / "info.json").write_text(json.dumps(info, indent=2, default=str))
     plot(by_k, out, a.alpha)
     pd.set_option("display.width", 200)

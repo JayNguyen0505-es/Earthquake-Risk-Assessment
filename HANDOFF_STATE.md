@@ -1,0 +1,77 @@
+# HANDOFF_STATE (shared by Claude and Codex; keep it current)
+
+Last update: 2026-11-24, Codex
+
+## Research focus (fixed by the user)
+Magnitude uncertainty under sparse networks (k = 2, 3, 5, 10, all) and transfer to new regions:
+measure overconfidence and shrinkage, calibration methods, local-data curve (how many events N
+until intervals are trustworthy). 5.1.2 only as downstream check: BSSA14 PGA exceedance before /
+after calibration. Plan phases 0 -> G are in docs/PAPER.md and below.
+
+## Machines
+- Mac: ~/era-paper (git, branch feature/magnitude-calibration; push from here only). venv: .venv-mac
+- DGX: `ssh dgx` (Tailscale 100.111.96.64, user hungntt), workdir ~/era-paper (rsync from Mac, no git push).
+  Python: ~/era-paper/.venv (inherits ~/Projects/Earthquake-Risk-Assessment/.venv-dgx via .pth; torch cu130 OK).
+  User's old repo ~/Projects/Earthquake-Risk-Assessment: READ ONLY, never modify.
+  data/e2e/* and 511/outputs/magnitude/old_* and 511/outputs/e2e_old are symlinks into the old repo.
+- Shared DGX: run every job through `bash scripts/dgx/guard.sh <name> <cmd>` inside tmux session `era`.
+  Never touch other users' processes. Never print big logs (tail -n 20 only).
+- Disk budget: 350 GB new data. Free at start: 1014 GB. ~/.seisbench already 146 GB (aq2009gm, ethz).
+
+## Phase status
+- [x] 0 setup (repo synced, links made; venv, tmux, InstanceGM size check pending)
+- [x] A ablation: why DL magnitude shrinks (slope 0.3) - needs 511/e2e_magnitudes.py
+- [x] B data: InstanceGM (if fits), Marche 2022, ML+Mw subset
+- [x] C models: AQ2009GM gauss/event, InstanceGM gauss/event, GBM on amplitude features, WA ML + station terms, TEAM-LM (time-boxed)
+- [x] D e2e reruns -> station_magnitudes.csv
+- [x] E calibration study + local-data curve + bootstrap CIs
+- [x] F BSSA14 exceedance (OpenQuake)
+- [x] G results/REPORT.md
+
+## Running jobs (DGX)
+(none: all queues finished 2026-11-25; tmux era has idle windows only)
+
+## Results so far
+- Phase F tooling ready in `512/magnitude_to_shaking.py` (OpenQuake 3.26.2). All 20 tests and pyflakes on both new files pass in `.venv-mac`. Both modes produced all four outputs on the AQ2009 Phase E pilot (90 transplant and 30 observed summary rows for k=3/all and three methods). A synthetic CLI run verified that infinite and NaN widths are dropped and counted.
+- Phase E tooling ready: default k=2/3/5/10/all, event bootstrap CIs, calibration-only station terms, and the parallel local-data curve. All 44 tests and pyflakes pass in `.venv-mac`; a 50k-event group with 1,000 bootstrap draws took 0.75 s. Real-data Phase E runs are pending.
+- phase A code ready: `511/e2e_magnitudes.py`, `511/ablation_summary.py`, `511/tests/test_e2e_magnitudes.py`, tests pass (.venv-mac unittest discovery and pyflakes).
+- Export 2026-11-23: DL coverage95 naive 51% in-domain, 8-26% e2e; DL slope 0.29-0.38 e2e vs WA ML ~1.
+- AQ2009 pilot (calibration_study --temporal-split 0.66): shared+conformal ~96-97% at every k;
+  fixed-width const_conf about equal in-domain (risk for the method claim).
+
+## Next actions
+1. Finish phase 0; start AQ2009GM training (gauss, then event) on DGX.
+2. Run the phase A ablations on the reference datasets and compare the event and feature-shift summaries.
+- 2026-11-24 phase A (old AQ2009GM checkpoint, all stations <=300 km): DL slope 0.70-0.87 with constant bias
+  (central_italy -0.50, ridgecrest -0.24); WA ML slope 0.86-0.92, bias -0.03 / +0.20; HN ML biased +0.5 for
+  small events (accelerometer noise floor). The old e2e slope 0.3 likely came from the AQ2009GM_M1.5_snr10
+  checkpoint picked by `ls -t` (log shows it was used once). Verification run: 511/outputs/ablation/m15.
+  Location (ref vs auto) and P source (analyst/theory vs auto) change DL error by < 0.04: NOT the cause.
+- 2026-11-24 prelim phase E (old checkpoint, ML-label events, 511/outputs/calibration_prelim3 on Mac):
+  transfer with N=0 local events fails for every method (regional bias). With N>=20 target events
+  (target_only) all bias-corrected methods reach ~93-96%. Shared-error (tau) beats the per-k fixed-width
+  baseline (const_mondrian_bc) by ~3-12% interval score at k=2-3, ties at k=all. One global factor
+  (naive_conf_bc) over-covers at small k and under-covers (78-85%) at k=all. Pooling source+target fails.
+  Framing: evaluation + k-dependence + local-data curve (~20-30 events); method gain modest.
+- 2026-11-24 OpenQuake cannot import on DGX (fiona/GDAL has no aarch64 wheel, no sudo): run 512/magnitude_to_shaking.py on the Mac
+  (.venv-mac has OpenQuake) on events.csv.gz pulled from DGX. In-domain test: calibration changes PGA-exceedance Brier by ~0.001
+  (BSSA14 sigma dominates); the downstream effect is expected only under transfer bias (N=0 vs N=30 runs, run_phase_f.sh).
+- Running on DGX (tmux era): train (run_paper.sh train: AQ2009GM gauss then event), instancegm (download, slow),
+  final (scripts/dgx/run_final.sh, waits for train), phase_f (scripts/dgx/run_phase_f.sh, waits for final AQ part).
+  Watch: /tmp/era_watch.sh on the Mac.
+- 2026-11-24 FINAL AQ2009GM_gauss (511/outputs/calibration_final on Mac+DGX): in-domain naive cov95 53% at k=all,
+  shared/const_mondrian ~95%. Transfer N=0 fails (2-82%). target_only N>=20 -> ~93-96%; shared_conf beats
+  const_mondrian_bc interval score by 6-17% at k=2 in all 4 regions, ties at k=all. BSSA14 (Ms=5, 0.1 g, k=all):
+  central Italy missed-hazard 9-11% at N=0 -> ~0.1% with 30 local events, Brier 0.169 -> 0.122 (floor 0.112);
+  method choice after calibration barely matters; Marche fewshot30 slightly WORSE (early-sequence bias not stationary).
+- 2026-11-24 Phase G complete for the Mac snapshot: `.venv-mac/bin/python results/make_tables.py` generates 17 CSV/Markdown pairs and four figures, verified with `-W error` and pyflakes. Vietnamese `results/REPORT.md` records the checkpoint rerun, event-loss regression and worse Marche few-shot Brier. At N=30 and random k=2, shared_conf improves interval score by 5.1–17.1% across the four target sets. InstanceGM is marked “đang chạy” because its outputs are absent on Mac.
+- 2026-11-25 InstanceGM_gauss (30 epochs, dev RMSE 0.200): in-domain naive cov95 50% at k=all, shared/const_mondrian ~95%.
+  Transfer bias +0.24 (Ridgecrest), +0.22 (Marche): more training data does NOT remove regional bias.
+  Local-data curve: shared_conf does NOT beat const_mondrian_bc consistently with this model (Ridgecrest k=2 N=30:
+  1.74 vs 1.66, worse; Marche k=2: 1.90 vs 1.98, better; k=all mixed). Marche coverage stays 0.89-0.92 even with
+  N=30-100 (non-stationary sequence). => method gain is model-dependent and small; the robust contributions are the
+  overconfidence measurement, the k-dependence, the regional-bias finding and the N~20-30 local-data curve.
+- AQ2009GM_event (training-time shared-error loss): dev RMSE 0.47 vs 0.19, tau 0.42 -> negative result (event-level
+  error unidentifiable from event-level labels; mean predictions drift). Post-hoc tau is the method to keep.
+- 2026-11-25: Reran `python3 results/make_tables.py` successfully with InstanceGM_gauss and AQ2009GM_event present. InstanceGM in-domain coverage uses the calibration subset in T3_indomain. T1_data falls back to the metrics.json count because the full-station event rows do not match the reported test-event count.
+- Updated `results/REPORT.md` and added the one-page Vietnamese lay summary `results/SUMMARY_VI.md`. The report now treats the shared-error gain as small and model-dependent, records the event-loss regression, and centers the publication assessment on measured overconfidence, station-count dependence, persistent transfer bias and the local calibration curve with the Marche non-stationarity caveat.
